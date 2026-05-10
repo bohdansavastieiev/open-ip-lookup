@@ -1,0 +1,7 @@
+[
+  {
+    "cloud_provider": "AWS",
+    "cidr_block": "1.178.1.123/24",
+    "region": "us-west-2"
+  }
+]

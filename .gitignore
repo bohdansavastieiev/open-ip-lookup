@@ -1,0 +1,67 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/tailwindcss
+/openiplookup
+/server
+/cmd/server/server
+
+# Build output
+/bin/
+/dist/
+/internal/server/static/styles.css
+
+# Test & Coverage
+*.test
+*.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency directories
+/vendor/
+/node_modules/
+package-lock.json
+
+# IDE / Editor
+.idea/
+.vscode/
+.zed/
+.nvim/
+Session.vim
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.env
+!.env.example
+
+*.pem
+*.key
+*.crt
+
+# Logs
+*.log
+/logs/
+
+# Temp files
+/tmp/
+*.tmp
+
+# Project-specific
+/data/
+*.mmdb
+AGENTS.md
+config.production.json

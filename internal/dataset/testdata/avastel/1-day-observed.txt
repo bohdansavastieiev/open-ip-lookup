@@ -1,0 +1,6 @@
+# Avastel 1 day proxy bots IPs blocklist 
+# Last update: 2026-03-04T01:03:24.727718Z
+# Number of proxy IPs: 2
+
+ip_address;autonomous_system
+154.37.79.123;QuickPacket, LLC

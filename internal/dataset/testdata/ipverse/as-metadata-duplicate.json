@@ -1,0 +1,18 @@
+[
+  {
+    "asn": 1,
+    "metadata": {
+      "handle": "A",
+      "description": "first",
+      "origin": "authoritative"
+    }
+  },
+  {
+    "asn": 1,
+    "metadata": {
+      "handle": "B",
+      "description": "second",
+      "origin": "authoritative"
+    }
+  }
+]

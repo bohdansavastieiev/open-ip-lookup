@@ -1,0 +1,38 @@
+.git
+.gitignore
+.dockerignore
+AGENTS.md
+config.production.json
+
+# Runtime data and generated artifacts must never enter image builds.
+data
+tmp
+logs
+
+# Secrets and local environment files.
+.env
+.env.*
+*.env
+!.env.example
+
+*.pem
+*.key
+*.crt
+
+# Build outputs.
+openiplookup
+tailwindcss
+internal/server/static/styles.css
+bin
+dist
+
+# Editor and OS files.
+.idea
+.vscode
+.zed
+.nvim
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

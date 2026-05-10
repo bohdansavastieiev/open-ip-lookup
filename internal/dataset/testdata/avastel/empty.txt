@@ -1,0 +1,5 @@
+# Avastel 1 day proxy bots IPs blocklist
+# Last update: 2026-01-01 00:00:00
+# Number of proxy IPs: 0
+# Nothing follows
+ip_address;autonomous_system

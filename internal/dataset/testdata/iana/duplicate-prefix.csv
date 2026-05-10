@@ -1,0 +1,3 @@
+Address Block,Name,RFC
+10.0.0.0/8,Private-Use,RFC1918
+10.0.0.0/8 [1],Duplicate,RFC1918

@@ -1,0 +1,39 @@
+{
+    "server": {
+        "addr": ":8080",
+        "read_header_timeout_seconds": 5,
+        "read_timeout_seconds": 15,
+        "write_timeout_seconds": 15,
+        "idle_timeout_seconds": 60,
+        "shutdown_timeout_seconds": 5
+    },
+    "sources": {
+        "data_dir": "./data",
+        "full_sync": {
+            "interval_hours": 48,
+            "start_at_utc": "1970-01-01T00:00:00Z"
+        },
+        "enabled": [
+            "iana_special_ipv4",
+            "iana_special_ipv6",
+            "cymru_fullbogons_ipv4",
+            "cymru_fullbogons_ipv6",
+            "maxmind_geolite2_city",
+            "maxmind_geolite2_asn",
+            "dan_tor_exit",
+            "dan_tor_full",
+            "x4bnet_lists-vpn_vpn-ipv4",
+            "x4bnet_lists-vpn_datacenter-ipv4",
+            "tobilg_public-cloud-provider-ip-ranges_all",
+            "rezmoss_cloud-provider-ip-addresses_all-providers",
+            "az0_vpn-ip_ip",
+            "avastel_bot-ips-lists_1-day",
+            "avastel_bot-ips-lists_5-day",
+            "avastel_bot-ips-lists_8-day",
+            "bountyyfi_bad-asn-list_all",
+            "umkus_ip-index_asn-dcs",
+            "ipverse_as-ip-blocks_all",
+            "ipverse_as-metadata_all"
+        ]
+    }
+}

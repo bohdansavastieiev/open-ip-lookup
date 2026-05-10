@@ -1,0 +1,12 @@
+{
+  "asn": 1,
+  "metadata": {
+    "origin": "authoritative"
+  },
+  "prefixes": {
+    "ipv4": [
+      "192.0.2.1/24"
+    ],
+    "ipv6": []
+  }
+}

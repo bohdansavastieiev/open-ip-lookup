@@ -1,0 +1,3 @@
+# last updated 1772427301 (Mon Mar  2 04:55:01 2026 GMT)
+# Know your network!  Please rigorously test all filters!
+192.0.2.0/24

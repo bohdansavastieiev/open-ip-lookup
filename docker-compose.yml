@@ -1,0 +1,15 @@
+services:
+  openiplookup:
+    build: .
+    container_name: open-ip-lookup
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - openiplookup-data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  openiplookup-data:

@@ -1,0 +1,23 @@
+services:
+  openiplookup:
+    image: ghcr.io/bohdansavastieiev/open-ip-lookup:latest
+    container_name: open-ip-lookup
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - openiplookup-data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: open-ip-lookup-tunnel
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
+    depends_on:
+      - openiplookup
+    restart: unless-stopped
+
+volumes:
+  openiplookup-data:
