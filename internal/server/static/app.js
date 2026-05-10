@@ -320,19 +320,15 @@ function plural(count, singular) {
 
 function renderControls(rows) {
 	controlsNode.replaceChildren();
-	controlsNode.hidden = rows.length === 0;
+	controlsNode.hidden = true;
+
 	if (rows.length === 0) {
 		return;
 	}
 
-	controlsNode.className = "controls-panel";
-
-	const filterSection = document.createElement("section");
-	filterSection.className = "filter-section";
-	filterSection.appendChild(renderFilterHeader());
-
 	const filters = document.createElement("div");
 	filters.className = "filter-list";
+
 	for (const group of FILTER_GROUPS) {
 		const options = filterOptions(rows, group.key);
 		const selectedCount = state.filters.get(group.key)?.size || 0;
@@ -346,11 +342,28 @@ function renderControls(rows) {
 		filters.appendChild(renderFlagFilterGroup(flags));
 	}
 
-	filterSection.appendChild(filters);
 	const activeFilters = renderActiveFilters();
+
+	if (filters.children.length === 0 && !activeFilters) {
+		state.openFilterKey = null;
+		return;
+	}
+
+	controlsNode.hidden = false;
+	controlsNode.className = "controls-panel";
+
+	const filterSection = document.createElement("section");
+	filterSection.className = "filter-section";
+	filterSection.appendChild(renderFilterHeader());
+
+	if (filters.children.length > 0) {
+		filterSection.appendChild(filters);
+	}
+
 	if (activeFilters) {
 		filterSection.appendChild(activeFilters);
 	}
+
 	controlsNode.appendChild(filterSection);
 }
 
