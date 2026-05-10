@@ -10,6 +10,10 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    logging:
+      driver: journald
+      options:
+        tag: open-ip-lookup
 
   cloudflared:
     image: cloudflare/cloudflared:latest
