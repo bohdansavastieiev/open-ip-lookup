@@ -301,7 +301,7 @@
   }
 
   .results-column-occurrences {
-    width: 7%;
+    width: 6%;
   }
 
   .results-column-country {
@@ -309,15 +309,15 @@
   }
 
   .results-column-region {
-    width: 9%;
+    width: 10%;
   }
 
   .results-column-city {
-    width: 8%;
+    width: 9%;
   }
 
   .results-column-asn {
-    width: 8%;
+    width: 9%;
   }
 
   .results-column-organization {
@@ -325,7 +325,7 @@
   }
 
   .results-column-flags {
-    width: 21%;
+    width: 19%;
   }
 
   .results-head {
@@ -349,6 +349,10 @@
     @apply divide-y divide-slate-800/80;
   }
 
+  .result-row {
+    @apply font-mono;
+  }
+
   .result-cell {
     @apply px-4 py-4 align-top;
   }
@@ -358,17 +362,13 @@
     overflow-wrap: break-word;
   }
 
-  .result-mono-cell {
-    @apply min-w-0 whitespace-nowrap px-4 py-4 align-top font-mono text-slate-200;
-  }
-
   .result-empty-cell {
     @apply px-4 py-4 align-top text-slate-600;
   }
 
   .occurrence-badge {
     @apply inline-flex rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5;
-    @apply font-mono text-xs font-semibold text-slate-400;
+    @apply text-xs font-semibold text-slate-400;
   }
 
   .occurrence-badge[data-repeated="true"] {
@@ -384,7 +384,7 @@
   }
 
   .result-ip-address {
-    @apply whitespace-normal font-mono text-[0.9375rem] font-medium text-slate-100;
+    @apply whitespace-normal text-[0.9375rem] font-medium text-slate-100;
     overflow-wrap: anywhere;
   }
 
@@ -421,7 +421,7 @@
   }
 
   .non-routable-rfc {
-    @apply whitespace-nowrap font-mono text-slate-500;
+    @apply whitespace-nowrap text-slate-500;
   }
 
   .kind-badge {

@@ -820,7 +820,7 @@ function renderSummaryRow(row) {
 			valueCell(countryLabel(row)),
 			valueCell(row.region),
 			valueCell(row.city),
-			valueCell(row.asn, "mono"),
+			valueCell(row.asn),
 			valueCell(row.organization),
 			flagsCell(row.flags),
 		);
@@ -898,14 +898,14 @@ function expandSpacer() {
 	return spacer;
 }
 
-function valueCell(value, variant = "") {
+function valueCell(value) {
 	const td = document.createElement("td");
 	if (!value) {
 		td.className = "result-empty-cell";
 		td.textContent = "—";
 		return td;
 	}
-	td.className = variant === "mono" ? "result-mono-cell" : "result-text-cell";
+	td.className = "result-text-cell";
 	td.textContent = value || "—";
 	return td;
 }
