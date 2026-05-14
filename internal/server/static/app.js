@@ -338,7 +338,7 @@ function renderControls(rows) {
 	}
 
 	const flags = flagOptions(rows);
-	if (hasUsefulFilterOptions(flags) || state.flagFilters.size > 0) {
+	if (hasUsefulFlagFilterOptions(rows) || state.flagFilters.size > 0) {
 		filters.appendChild(renderFlagFilterGroup(flags));
 	}
 
@@ -376,6 +376,24 @@ function sectionHeading(text) {
 
 function hasUsefulFilterOptions(options) {
 	return options.length > 1;
+}
+
+function hasUsefulFlagFilterOptions(rows) {
+	const flagSets = new Set();
+	for (const row of rows) {
+		if (!rowMatchesFiltersExcept(row, FLAG_FILTER_KEY)) {
+			continue;
+		}
+		flagSets.add(flagSetKey(row));
+		if (flagSets.size > 1) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function flagSetKey(row) {
+	return JSON.stringify(Array.from(row.flagSet).sort());
 }
 
 function renderFilterHeader() {
