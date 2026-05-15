@@ -113,12 +113,12 @@ func logLoadedSource(logger *slog.Logger, sourceID source.ID, data any) {
 	}
 
 	if kind != "" {
-		logger.Info("loaded source",
+		logger.Debug("loaded source",
 			slog.String("id", string(sourceID)),
 			slog.String("kind", kind),
 			slog.Int("count", rv.Len()))
 	} else {
-		logger.Info("loaded source", slog.String("id", string(sourceID)))
+		logger.Debug("loaded source", slog.String("id", string(sourceID)))
 	}
 }
 

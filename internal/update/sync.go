@@ -38,7 +38,7 @@ func (u *Updater) updateSources(
 ) (SyncEvent, error) {
 	startedAt := time.Now()
 	if len(sourceIDs) > 0 {
-		u.logger.Info(
+		u.logger.Debug(
 			"source sync started",
 			slog.String("scope", string(scope)),
 			slog.Int("sources", len(sourceIDs)),
@@ -63,7 +63,7 @@ func (u *Updater) updateSources(
 				return SyncEvent{}, errors.Join(err, tx.rollback())
 			}
 			refreshed = append(refreshed, id)
-			u.logger.Info("source promoted", slog.String("source", string(id)))
+			u.logger.Debug("source promoted", slog.String("source", string(id)))
 		}
 
 		s.Sources[id] = result.update.state
@@ -99,16 +99,8 @@ func (u *Updater) updateSources(
 	if err := s.saveStateJSON(stateFilePath(u.cfg.DataDir)); err != nil {
 		return SyncEvent{}, errors.Join(err, tx.rollback())
 	}
-	finalizeStartedAt := time.Now()
-	hadFinalizers := len(tx.finalizers) > 0
 	if err := tx.finalize(); err != nil {
-		u.logger.Info("finalize storage transaction", slog.Any("err", err))
-	}
-	if hadFinalizers {
-		u.logger.Info(
-			"storage transaction finalized",
-			slog.Duration("duration", time.Since(finalizeStartedAt)),
-		)
+		u.logger.Warn("cleanup rollback artifacts failed", slog.Any("err", err))
 	}
 	completedAt := time.Now()
 	status := "completed"

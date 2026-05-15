@@ -100,7 +100,7 @@ func (u *Updater) refreshSource(
 	retryDelays []time.Duration,
 ) (result sourceRefreshResult) {
 	startedAt := time.Now()
-	u.logger.Info("source refresh started", slog.String("source", string(job.id)))
+	u.logger.Debug("source refresh started", slog.String("source", string(job.id)))
 	defer func() {
 		result.duration = time.Since(startedAt)
 		logSourceRefreshResult(u.logger, result)
@@ -119,7 +119,7 @@ func (u *Updater) refreshSource(
 
 func logSourceRefreshResult(logger *slog.Logger, result sourceRefreshResult) {
 	if result.err != nil {
-		logger.Info(
+		logger.Warn(
 			"source artifact prepare failed",
 			slog.String("source", string(result.id)),
 			slog.Any("err", result.err),
@@ -128,7 +128,7 @@ func logSourceRefreshResult(logger *slog.Logger, result sourceRefreshResult) {
 		return
 	}
 	if !result.update.success {
-		logger.Info(
+		logger.Warn(
 			"source artifact prepare failed",
 			slog.String("source", string(result.id)),
 			slog.Bool("retryable", result.update.retryable),
@@ -138,7 +138,7 @@ func logSourceRefreshResult(logger *slog.Logger, result sourceRefreshResult) {
 	}
 
 	if !result.update.changed {
-		logger.Info(
+		logger.Debug(
 			"source refresh checked",
 			slog.String("source", string(result.id)),
 			slog.String("status", "not_modified"),
@@ -147,7 +147,7 @@ func logSourceRefreshResult(logger *slog.Logger, result sourceRefreshResult) {
 		return
 	}
 
-	logger.Info(
+	logger.Debug(
 		"source artifact prepared",
 		slog.String("source", string(result.id)),
 		slog.String("status", "downloaded"),
@@ -177,7 +177,7 @@ func (u *Updater) refreshWithRetries(
 			return result, nil
 		}
 
-		u.logger.Info(
+		u.logger.Debug(
 			"source refresh retry scheduled",
 			slog.String("source", string(definition.ID)),
 			slog.Int("attempt", attempt+1),
