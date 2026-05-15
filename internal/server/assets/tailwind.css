@@ -6,20 +6,8 @@
 @layer components {
   .page-shell {
     @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
-  }
-
-  .page-glow-layer {
-    @apply pointer-events-none fixed inset-0 -z-10 overflow-hidden;
-  }
-
-  .page-glow-primary {
-    @apply absolute left-1/2 top-[-20rem] h-[42rem] w-[42rem] -translate-x-1/2;
-    @apply rounded-full bg-cyan-500/10 blur-3xl;
-  }
-
-  .page-glow-secondary {
-    @apply absolute bottom-[-18rem] right-[-10rem] h-[36rem] w-[36rem];
-    @apply rounded-full bg-blue-500/10 blur-3xl;
+    background-image:
+      radial-gradient(ellipse 42rem 120rem at 50% 45%, rgb(6 182 212 / 0.14), transparent 70%);
   }
 
   .page-layout {
@@ -54,7 +42,7 @@
   }
 
   .lookup-card {
-    @apply rounded-3xl border border-slate-800 bg-slate-900/80 p-4;
+    @apply rounded-3xl border border-slate-800 bg-slate-900 p-4;
     @apply shadow-2xl shadow-slate-950/40 sm:p-5;
   }
 
@@ -63,7 +51,7 @@
   }
 
   .lookup-input {
-    @apply min-h-56 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950/80;
+    @apply min-h-56 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950;
     @apply px-4 py-3 font-mono text-sm leading-6 text-slate-100 outline-none transition;
     @apply placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20;
   }
@@ -81,7 +69,7 @@
   .button-ghost {
     @apply rounded-xl px-3 py-2 text-sm font-medium text-slate-400;
     @apply disabled:cursor-not-allowed disabled:opacity-40;
-    @apply enabled:hover:bg-slate-800/70 enabled:hover:text-cyan-100;
+    @apply enabled:hover:bg-slate-900 enabled:hover:text-cyan-100;
   }
 
   .lookup-status {
@@ -93,7 +81,7 @@
   }
 
   .lookup-status[data-status="error"] {
-    @apply border-rose-400/40 bg-rose-500/10 text-rose-100;
+    @apply border-rose-400 bg-slate-950 text-rose-100;
   }
 
   .site-footer {
@@ -109,7 +97,7 @@
   }
 
   .controls-panel {
-    @apply rounded-3xl border border-slate-800 bg-slate-950/70 p-4;
+    @apply rounded-3xl border border-slate-800 bg-slate-950 p-4;
     @apply shadow-xl shadow-slate-950/25;
   }
 
@@ -138,7 +126,7 @@
   }
 
   .active-filters-panel {
-    @apply mt-4 border-t border-slate-800/80 pt-3;
+    @apply mt-4 border-t border-slate-800 pt-3;
   }
 
   .filter-chip {
@@ -176,7 +164,7 @@
   }
 
   .filter-button {
-    @apply rounded-full border-0 bg-transparent px-3 py-2 text-sm font-medium text-slate-200 transition-colors;
+    @apply rounded-full border-0 bg-transparent px-3 py-2 text-sm font-medium text-slate-400 transition-colors;
     @apply hover:text-cyan-100 focus:outline-none;
   }
 
@@ -198,7 +186,7 @@
 
   .filter-option {
     @apply flex items-start justify-between gap-3 rounded-xl px-2 py-1.5;
-    @apply text-sm text-slate-300 hover:bg-slate-800/70;
+    @apply text-sm text-slate-400 hover:text-cyan-100;
   }
 
   .filter-option-left {
@@ -227,11 +215,11 @@
   }
 
   .empty-state {
-    @apply rounded-3xl border border-dashed border-slate-800 bg-slate-950/50 p-8 text-center;
+    @apply rounded-3xl border border-dashed border-slate-800 bg-slate-950 p-8 text-center;
   }
 
   .empty-state-quiet {
-    @apply border-slate-700/60 bg-slate-950/20 p-6;
+    @apply border-slate-700 bg-slate-950 p-6;
   }
 
   .empty-state-title {
@@ -247,17 +235,17 @@
   }
 
   .results-wrapper {
-    @apply overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/80;
+    @apply overflow-hidden rounded-3xl border border-slate-800 bg-slate-950;
     @apply shadow-2xl shadow-slate-950/40;
   }
 
   .results-header {
-    @apply flex flex-col gap-1 border-b border-slate-800 bg-slate-900/65 px-4 py-3;
+    @apply flex flex-col gap-1 border-b border-slate-800 bg-slate-950 px-4 py-3;
     @apply sm:flex-row sm:items-end sm:justify-between;
   }
 
   .results-title {
-    @apply text-sm font-semibold text-slate-100;
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-slate-500;
   }
 
   .results-stats {
@@ -329,7 +317,7 @@
   }
 
   .results-head {
-    @apply bg-slate-900/95 text-xs uppercase tracking-[0.16em] text-slate-500;
+    @apply bg-slate-900 text-xs uppercase tracking-[0.16em] text-slate-500;
   }
 
   .results-heading-cell {
@@ -346,11 +334,11 @@
   }
 
   .results-body {
-    @apply divide-y divide-slate-800/80;
+    @apply divide-y divide-slate-800;
   }
 
   .result-row {
-    @apply font-mono;
+    @apply bg-slate-950 font-mono;
   }
 
   .result-cell {
@@ -453,7 +441,8 @@
   }
 
   .detail-section {
-    @apply min-w-0 rounded-2xl border border-slate-800/80 bg-slate-900/45 p-4;
+    @apply min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-4;
+    container-type: inline-size;
   }
 
   .detail-heading {
@@ -465,7 +454,12 @@
   }
 
   .detail-item {
-    @apply grid min-w-0 gap-1 xl:grid-cols-[6.5rem_minmax(0,1fr)] xl:gap-3;
+    @apply grid min-w-0 gap-1;
+
+    @container (min-width: 24rem) {
+      grid-template-columns: 6.5rem minmax(0, 1fr);
+      gap: calc(var(--spacing) * 3);
+    }
   }
 
   .detail-subheading {
