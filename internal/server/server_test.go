@@ -140,6 +140,7 @@ func TestSecurityHeaders_AreSet(t *testing.T) {
 		"geolocation=(), microphone=(), camera=()",
 		res.Header().Get("Permissions-Policy"),
 	)
+	assert.Equal(t, "no-store", res.Header().Get("Cache-Control"))
 }
 
 func newTestServer(t *testing.T, svc *fakeLookupService) *Server {
