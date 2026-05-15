@@ -10,7 +10,7 @@
     "sources": {
         "data_dir": "./data",
         "full_sync": {
-            "interval_hours": 48,
+            "interval_hours": 24,
             "start_at_utc": "1970-01-01T00:00:00Z"
         },
         "enabled": [
