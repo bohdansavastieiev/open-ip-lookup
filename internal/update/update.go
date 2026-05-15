@@ -36,6 +36,10 @@ func New(cfg config.SourcesConfig, logger *slog.Logger) *Updater {
 }
 
 func (u *Updater) Run(ctx context.Context, events chan<- SyncEvent) error {
+	if err := validateEnabledSourceUpdates(u.cfg.Enabled); err != nil {
+		return err
+	}
+
 	now := time.Now().UTC()
 	s, err := loadStateForSync(u.cfg.DataDir, u.cfg.FullSync)
 	if err != nil {

@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -25,6 +26,8 @@ const (
 	SyncScopeFull    SyncScope = "full"
 	SyncScopePartial SyncScope = "partial"
 )
+
+var errUnsupportedSourceUpdate = errors.New("unsupported source update")
 
 func (u *Updater) updateSources(
 	ctx context.Context,
@@ -55,19 +58,6 @@ func (u *Updater) updateSources(
 	for _, result := range results {
 		id := result.id
 		definition := result.definition
-		if result.unsupported {
-			st := s.Sources[id]
-			if !st.HasLocalArtifact || !st.MarkedOutdatedAt.IsZero() {
-				failed = append(failed, id)
-				u.logger.Info(
-					"source update unsupported",
-					slog.String("source", string(id)),
-					slog.Duration("duration", result.duration),
-				)
-			}
-			continue
-		}
-
 		if result.update.changed {
 			if err := tx.promoteArtifact(definition, result.update.tempPath); err != nil {
 				return SyncEvent{}, errors.Join(err, tx.rollback())
@@ -147,24 +137,36 @@ func (u *Updater) updateSources(
 	}, nil
 }
 
-func isSourceUpdateSupported(definition source.Definition) bool {
+func validateSourceUpdateSupported(definition source.Definition) error {
 	switch definition.AuthKind {
 	case source.AuthKindNone:
-		return definition.ArtifactKind == source.ArtifactKindDirectFile ||
-			definition.ArtifactKind == source.ArtifactKindTarGzDir
+		if definition.ArtifactKind == source.ArtifactKindDirectFile ||
+			definition.ArtifactKind == source.ArtifactKindTarGzDir {
+			return nil
+		}
 	case source.AuthKindMaxMind:
-		return definition.ArtifactKind == source.ArtifactKindTarGzFile
-	default:
-		return false
+		if definition.ArtifactKind == source.ArtifactKindTarGzFile {
+			return nil
+		}
 	}
+
+	return fmt.Errorf("%w: %q", errUnsupportedSourceUpdate, definition.ID)
+}
+
+func validateEnabledSourceUpdates(enabled []source.ID) error {
+	for _, id := range enabled {
+		if err := validateSourceUpdateSupported(source.DefinitionFor(id)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (u *Updater) refreshableFailedSourceIDs(sources map[source.ID]sourceState) []source.ID {
 	var ids []source.ID
 	for _, id := range u.cfg.Enabled {
-		definition := source.DefinitionFor(id)
 		st, ok := sources[id]
-		if ok && isSourceUpdateSupported(definition) && hasRefreshableFailure(st) {
+		if ok && hasRefreshableFailure(st) {
 			ids = append(ids, id)
 		}
 	}
@@ -192,9 +194,6 @@ func (u *Updater) markOutdatedIfExpired(
 		return false, nil
 	}
 
-	if !isSourceUpdateSupported(definition) {
-		return false, nil
-	}
 	if err := tx.removeArtifact(definition); err != nil {
 		return false, err
 	}

@@ -19,13 +19,12 @@ type sourceRefreshJob struct {
 }
 
 type sourceRefreshResult struct {
-	index       int
-	id          source.ID
-	definition  source.Definition
-	update      sourceUpdateResult
-	duration    time.Duration
-	unsupported bool
-	err         error
+	index      int
+	id         source.ID
+	definition source.Definition
+	update     sourceUpdateResult
+	duration   time.Duration
+	err        error
 }
 
 func (u *Updater) refreshSources(
@@ -112,11 +111,6 @@ func (u *Updater) refreshSource(
 		id:         job.id,
 		definition: job.definition,
 	}
-	if !isSourceUpdateSupported(job.definition) {
-		result.unsupported = true
-		return result
-	}
-
 	update, err := u.refreshWithRetries(ctx, job.definition, job.state, retryDelays)
 	result.update = update
 	result.err = err
@@ -124,14 +118,6 @@ func (u *Updater) refreshSource(
 }
 
 func logSourceRefreshResult(logger *slog.Logger, result sourceRefreshResult) {
-	if result.unsupported {
-		logger.Info(
-			"source artifact prepare unsupported",
-			slog.String("source", string(result.id)),
-			slog.Duration("duration", result.duration),
-		)
-		return
-	}
 	if result.err != nil {
 		logger.Info(
 			"source artifact prepare failed",

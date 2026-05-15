@@ -620,6 +620,26 @@ func TestUpdateSources_MaxMindMissingCredentialsFailsSource(t *testing.T) {
 	assert.Equal(t, errorKindConfig, s.Sources[source.MaxMindGeoLite2City].ConsecutiveErrors[0].Kind)
 }
 
+func TestValidateEnabledSourceUpdates_AllKnownSourcesSupported(t *testing.T) {
+	definitions := source.Definitions()
+	ids := make([]source.ID, 0, len(definitions))
+	for _, definition := range definitions {
+		ids = append(ids, definition.ID)
+	}
+
+	require.NoError(t, validateEnabledSourceUpdates(ids))
+}
+
+func TestValidateSourceUpdateSupported_RejectsUnsupportedCombination(t *testing.T) {
+	err := validateSourceUpdateSupported(source.Definition{
+		ID:           "test_source",
+		ArtifactKind: source.ArtifactKindTarGzFile,
+		AuthKind:     source.AuthKindNone,
+	})
+
+	require.ErrorIs(t, err, errUnsupportedSourceUpdate)
+}
+
 func newTestUpdater(dataDir string, id source.ID, url string) *Updater {
 	return newTestUpdaterWithURLs(dataDir, []source.ID{id}, map[source.ID]string{id: url})
 }
