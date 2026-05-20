@@ -10,24 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFlagEmoji(t *testing.T) {
-	tests := []struct {
-		code string
-		want string
-	}{
-		{"US", "🇺🇸"},
-		{"GB", "🇬🇧"},
-		{"DE", "🇩🇪"},
-		{"", ""},
-		{"A", ""},
-		{"ABC", ""},
-		{"12", ""},
-	}
-	for _, tt := range tests {
-		assert.Equal(t, tt.want, flagEmoji(tt.code))
-	}
-}
-
 func TestHumanize(t *testing.T) {
 	tests := []struct {
 		input string

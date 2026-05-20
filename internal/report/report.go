@@ -43,15 +43,14 @@ type SpecialUse struct {
 }
 
 type Geo struct {
-	City         string  `json:"city,omitempty"`
-	Country      string  `json:"country,omitempty"`
-	CountryISO   string  `json:"countryIso,omitempty"`
-	CountryEmoji string  `json:"countryEmoji,omitempty"`
-	Region       string  `json:"region,omitempty"`
-	HasLocation  bool    `json:"hasLocation"`
-	Latitude     float64 `json:"latitude,omitempty"`
-	Longitude    float64 `json:"longitude,omitempty"`
-	Timezone     string  `json:"timezone,omitempty"`
+	City        string  `json:"city,omitempty"`
+	Country     string  `json:"country,omitempty"`
+	CountryISO  string  `json:"countryIso,omitempty"`
+	Region      string  `json:"region,omitempty"`
+	HasLocation bool    `json:"hasLocation"`
+	Latitude    float64 `json:"latitude,omitempty"`
+	Longitude   float64 `json:"longitude,omitempty"`
+	Timezone    string  `json:"timezone,omitempty"`
 }
 
 type ASN struct {
@@ -119,15 +118,14 @@ func buildEntry(ip netip.Addr, occurrences int, r dataset.IPResult) Entry {
 
 	if hasGeo(r.Geo) {
 		e.Geo = &Geo{
-			City:         r.Geo.City,
-			Country:      r.Geo.Country,
-			CountryISO:   r.Geo.CountryISO,
-			CountryEmoji: flagEmoji(r.Geo.CountryISO),
-			Region:       r.Geo.Region,
-			HasLocation:  r.Geo.Latitude != 0 || r.Geo.Longitude != 0,
-			Latitude:     r.Geo.Latitude,
-			Longitude:    r.Geo.Longitude,
-			Timezone:     r.Geo.Timezone,
+			City:        r.Geo.City,
+			Country:     r.Geo.Country,
+			CountryISO:  r.Geo.CountryISO,
+			Region:      r.Geo.Region,
+			HasLocation: r.Geo.Latitude != 0 || r.Geo.Longitude != 0,
+			Latitude:    r.Geo.Latitude,
+			Longitude:   r.Geo.Longitude,
+			Timezone:    r.Geo.Timezone,
 		}
 	}
 
@@ -267,17 +265,6 @@ func countOccurrences(ips []netip.Addr) map[netip.Addr]int {
 		result[ip]++
 	}
 	return result
-}
-
-func flagEmoji(code string) string {
-	if len(code) != 2 {
-		return ""
-	}
-	c0, c1 := code[0], code[1]
-	if c0 < 'A' || c0 > 'Z' || c1 < 'A' || c1 > 'Z' {
-		return ""
-	}
-	return string([]rune{0x1F1E6 + rune(c0-'A'), 0x1F1E6 + rune(c1-'A')})
 }
 
 func humanize(s string) string {

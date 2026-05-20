@@ -10,14 +10,14 @@ const SORT_DIRECTION = Object.freeze({
 });
 
 const TABLE_COLUMNS = Object.freeze([
-	{ key: "ip", label: "IP", sortable: true },
-	{ key: "occurrences", label: "Seen", sortable: true },
-	{ key: "country", label: "Country", sortable: true },
-	{ key: "region", label: "Region", sortable: true },
-	{ key: "city", label: "City", sortable: true },
-	{ key: "asn", label: "ASN", sortable: true },
-	{ key: "organization", label: "Organization", sortable: true },
-	{ key: "flags", label: "Flags", sortable: true },
+	{ key: "ip", label: "IP" },
+	{ key: "occurrences", label: "Input" },
+	{ key: "country", label: "Country" },
+	{ key: "region", label: "Region" },
+	{ key: "city", label: "City" },
+	{ key: "asn", label: "ASN" },
+	{ key: "organization", label: "Organization" },
+	{ key: "flags", label: "Flags" },
 ]);
 
 const FLAG_FILTER_KEY = "__flags";
@@ -145,7 +145,6 @@ function handleControlsClick(event) {
 		toggleFilterMenu(filterButton.dataset.filterMenu);
 		return;
 	}
-
 }
 
 function handleDocumentClick(event) {
@@ -163,10 +162,19 @@ function handleResultsClick(event) {
 		return;
 	}
 
-	const expandButton = event.target.closest("[data-expand-row]");
-	if (expandButton) {
-		toggleExpandedRow(Number(expandButton.dataset.expandRow));
+	const row = event.target.closest("[data-expand-row]");
+	if (row && isResultRowToggleTarget(event.target, row)) {
+		toggleExpandedRow(Number(row.dataset.expandRow));
 	}
+}
+
+function isResultRowToggleTarget(target, row) {
+	if (target.closest("[data-row-content]")) {
+		return false;
+	}
+
+	const cell = target.closest("td");
+	return cell?.parentElement === row;
 }
 
 function encodedFormBody(formNode) {
@@ -230,7 +238,6 @@ function normalizeEntry(entry, index) {
 		family: entry.isIpv6 ? "IPv6" : "IPv4",
 		kind: value(entry.kind),
 		country: value(entry.geo?.country),
-		countryEmoji: value(entry.geo?.countryEmoji),
 		countryIso: value(entry.geo?.countryIso),
 		region: value(entry.geo?.region),
 		city: value(entry.geo?.city),
@@ -332,7 +339,7 @@ function renderControls(rows) {
 	for (const group of FILTER_GROUPS) {
 		const options = filterOptions(rows, group.key);
 		const selectedCount = state.filters.get(group.key)?.size || 0;
-		if (hasUsefulFilterOptions(options) || selectedCount > 0) {
+		if (options.length > 1 || selectedCount > 0) {
 			filters.appendChild(renderFilterGroup(group, options));
 		}
 	}
@@ -351,31 +358,15 @@ function renderControls(rows) {
 
 	controlsNode.hidden = false;
 	controlsNode.className = "controls-panel";
-
-	const filterSection = document.createElement("section");
-	filterSection.className = "filter-section";
-	filterSection.appendChild(renderFilterHeader());
+	controlsNode.appendChild(renderFilterHeader());
 
 	if (filters.children.length > 0) {
-		filterSection.appendChild(filters);
+		controlsNode.appendChild(filters);
 	}
 
 	if (activeFilters) {
-		filterSection.appendChild(activeFilters);
+		controlsNode.appendChild(activeFilters);
 	}
-
-	controlsNode.appendChild(filterSection);
-}
-
-function sectionHeading(text) {
-	const heading = document.createElement("h2");
-	heading.className = "section-heading";
-	heading.textContent = text;
-	return heading;
-}
-
-function hasUsefulFilterOptions(options) {
-	return options.length > 1;
 }
 
 function hasUsefulFlagFilterOptions(rows) {
@@ -400,20 +391,19 @@ function renderFilterHeader() {
 	const wrapper = document.createElement("div");
 	wrapper.className = "filter-header";
 
-	const heading = sectionHeading("Filters");
-	const actions = document.createElement("div");
-	actions.className = "filter-actions";
+	const heading = document.createElement("h2");
+	heading.className = "section-heading";
+	heading.textContent = "Filters";
 
 	const activeFilters = activeFilterCount();
-	const clearButton = buttonElement(
-		`Clear filters${activeFilters ? ` (${activeFilters})` : ""}`,
-		"button-ghost",
-	);
+	const clearButton = document.createElement("button");
+	clearButton.type = "button";
+	clearButton.className = "button-ghost";
+	clearButton.textContent = `Clear filters${activeFilters ? ` (${activeFilters})` : ""}`;
 	clearButton.dataset.clearFilters = "true";
 	clearButton.disabled = activeFilters === 0;
 
-	actions.appendChild(clearButton);
-	wrapper.append(heading, actions);
+	wrapper.append(heading, clearButton);
 	return wrapper;
 }
 
@@ -474,7 +464,6 @@ function chipShell(label, valueLabel) {
 	chip.className = "filter-chip";
 
 	const labelSpan = document.createElement("span");
-	labelSpan.className = "filter-chip-label";
 	labelSpan.textContent = `${label}:`;
 
 	const valueSpan = document.createElement("span");
@@ -515,15 +504,9 @@ function renderFilterGroup(group, options) {
 }
 
 function filterShell(key) {
-	const shell = menuShell();
-	shell.dataset.menuShell = key;
-	return shell;
-}
-
-function menuShell() {
 	const shell = document.createElement("div");
 	shell.className = "menu-shell";
-	shell.dataset.menuShell = "true";
+	shell.dataset.menuShell = key;
 	return shell;
 }
 
@@ -566,18 +549,32 @@ function filterClearButton(key) {
 }
 
 function renderFilterCheckbox(key, item, groupLabel) {
+	const checkbox = filterCheckbox(state.filters.get(key)?.has(item.value) || false);
+	checkbox.dataset.filterKey = key;
+	checkbox.dataset.filterValue = item.value;
+	return filterOption(item, groupLabel, checkbox);
+}
+
+function renderFlagCheckbox(item) {
+	const checkbox = filterCheckbox(state.flagFilters.has(item.value));
+	checkbox.dataset.flagFilter = item.value;
+	return filterOption(item, "Flags", checkbox);
+}
+
+function filterCheckbox(checked) {
+	const checkbox = document.createElement("input");
+	checkbox.type = "checkbox";
+	checkbox.className = "filter-checkbox";
+	checkbox.checked = checked;
+	return checkbox;
+}
+
+function filterOption(item, groupLabel, checkbox) {
 	const label = document.createElement("label");
 	label.className = "filter-option";
 
 	const left = document.createElement("span");
 	left.className = "filter-option-left";
-
-	const checkbox = document.createElement("input");
-	checkbox.type = "checkbox";
-	checkbox.className = "filter-checkbox";
-	checkbox.checked = state.filters.get(key)?.has(item.value) || false;
-	checkbox.dataset.filterKey = key;
-	checkbox.dataset.filterValue = item.value;
 
 	const text = document.createElement("span");
 	text.className = "filter-option-label";
@@ -609,35 +606,6 @@ function renderFlagFilterGroup(flags) {
 	return shell;
 }
 
-function renderFlagCheckbox(item) {
-	const label = document.createElement("label");
-	label.className = "filter-option";
-
-	const left = document.createElement("span");
-	left.className = "filter-option-left";
-
-	const checkbox = document.createElement("input");
-	checkbox.type = "checkbox";
-	checkbox.className = "filter-checkbox";
-	checkbox.checked = state.flagFilters.has(item.value);
-	checkbox.dataset.flagFilter = item.value;
-
-	const text = document.createElement("span");
-	text.className = "filter-option-label";
-	text.textContent = filterOptionLabel(item.value, "Flags");
-	if (item.value === "") {
-		text.dataset.empty = "true";
-	}
-
-	const count = document.createElement("span");
-	count.className = "filter-option-count";
-	count.textContent = item.count.toLocaleString();
-
-	left.append(checkbox, text);
-	label.append(left, count);
-	return label;
-}
-
 function renderResults(rows, visibleCount) {
 	resultsNode.replaceChildren();
 	resultsNode.className = "results-min-height";
@@ -663,15 +631,15 @@ function renderResults(rows, visibleCount) {
 		return;
 	}
 
-	const scroller = document.createElement("div");
-	scroller.className = "results-scroller";
-
 	const table = document.createElement("table");
 	table.className = "results-table";
-	table.append(renderTableColgroup(), renderTableHead(), renderTableBody(rows));
+	table.append(
+		renderTableColgroup(),
+		renderTableHead(),
+		renderTableBody(rows),
+	);
 
-	scroller.appendChild(table);
-	wrapper.appendChild(scroller);
+	wrapper.appendChild(table);
 	resultsNode.appendChild(wrapper);
 }
 
@@ -765,12 +733,8 @@ function renderTableHead() {
 		const th = document.createElement("th");
 		th.scope = "col";
 		th.className = "results-heading-cell";
-		if (column.sortable) {
-			th.setAttribute("aria-sort", ariaSortValue(column.key));
-			th.appendChild(sortHeaderButton(column));
-		} else {
-			th.textContent = column.label;
-		}
+		th.setAttribute("aria-sort", ariaSortValue(column.key));
+		th.appendChild(sortHeaderButton(column));
 		tr.appendChild(th);
 	}
 
@@ -812,12 +776,17 @@ function renderTableBody(rows) {
 function renderSummaryRow(row) {
 	const tr = document.createElement("tr");
 	tr.className = "result-row";
-	tr.dataset.kind = row.kind;
-	tr.append(renderIpCell(row, isExpandable(row)), occurrenceCell(row.occurrences));
+	if (isExpandable(row)) {
+		const expanded = state.expandedRows.has(row.index);
+		tr.dataset.expandRow = String(row.index);
+		tr.dataset.expanded = String(expanded);
+		tr.setAttribute("aria-expanded", String(expanded));
+	}
+	tr.append(renderIpCell(row), occurrenceCell(row.occurrences));
 
 	if (row.kind === IP_KIND.routable) {
 		tr.append(
-			valueCell(countryLabel(row)),
+			countryCell(row),
 			valueCell(row.region),
 			valueCell(row.city),
 			valueCell(row.asn),
@@ -840,7 +809,8 @@ function occurrenceCell(count) {
 	td.className = "result-cell";
 
 	const badge = document.createElement("span");
-	badge.className = "occurrence-badge";
+	badge.className = "occurrence-count result-row-text";
+	badge.dataset.rowContent = "true";
 	badge.dataset.repeated = String(count > 1);
 	badge.textContent = `${count.toLocaleString()}x`;
 
@@ -848,66 +818,90 @@ function occurrenceCell(count) {
 	return td;
 }
 
-function renderIpCell(row, canExpand) {
+function renderIpCell(row) {
 	const td = document.createElement("td");
-	td.className = "result-cell";
+	td.className = "result-text-cell";
 
-	const wrapper = document.createElement("div");
-	wrapper.className = "result-ip-content";
+	const ip = resultRowText(row.ip);
+	ip.classList.add("result-ip-address");
 
-	if (canExpand) {
-		wrapper.appendChild(expandButton(row));
-	} else {
-		wrapper.appendChild(expandSpacer());
-	}
-
-	const text = document.createElement("div");
-	text.className = "result-ip-text";
-
-	const ip = document.createElement("span");
-	ip.className = "result-ip-address";
-	ip.textContent = row.ip;
-
-	const family = document.createElement("span");
-	family.className = "result-ip-family";
-	family.textContent = row.family;
-
-	text.append(ip, family);
-	wrapper.appendChild(text);
-	td.appendChild(wrapper);
+	td.appendChild(ip);
 	return td;
-}
-
-function expandButton(row) {
-	const button = document.createElement("button");
-	button.type = "button";
-	button.className = "row-expand-button";
-	button.dataset.expandRow = String(row.index);
-	button.setAttribute("aria-expanded", String(state.expandedRows.has(row.index)));
-	button.setAttribute("aria-label", state.expandedRows.has(row.index)
-		? "Hide details"
-		: "Show details");
-	button.textContent = state.expandedRows.has(row.index) ? "▲" : "▼";
-	return button;
-}
-
-function expandSpacer() {
-	const spacer = document.createElement("span");
-	spacer.className = "row-expand-spacer";
-	spacer.setAttribute("aria-hidden", "true");
-	return spacer;
 }
 
 function valueCell(value) {
 	const td = document.createElement("td");
 	if (!value) {
 		td.className = "result-empty-cell";
-		td.textContent = "—";
+		td.appendChild(resultRowText("—"));
 		return td;
 	}
 	td.className = "result-text-cell";
-	td.textContent = value || "—";
+	td.appendChild(resultRowText(value));
 	return td;
+}
+
+function resultRowText(value) {
+	const span = document.createElement("span");
+	span.className = "result-row-text";
+	span.dataset.rowContent = "true";
+	span.textContent = value || "—";
+	return span;
+}
+
+function countryCell(row) {
+	const value = countryValue(row, true);
+	if (!value) {
+		return valueCell("");
+	}
+
+	const td = document.createElement("td");
+	td.className = "result-text-cell";
+	td.appendChild(value);
+	return td;
+}
+
+function countryDetail(row) {
+	return countryValue(row) || "—";
+}
+
+function countryValue(row, alignRowText = false) {
+	if (!row.country) {
+		return null;
+	}
+
+	const wrapper = document.createElement("span");
+	wrapper.className = "country-value";
+	wrapper.dataset.rowContent = "true";
+
+	const flagPath = countryFlagPath(row.countryIso);
+	if (flagPath) {
+		wrapper.appendChild(countryFlag(flagPath));
+	}
+
+	const label = document.createElement("span");
+	label.className = alignRowText ? "country-label result-row-text" : "country-label";
+	label.textContent = row.country;
+	wrapper.appendChild(label);
+	return wrapper;
+}
+
+function countryFlag(flagPath) {
+	const img = document.createElement("img");
+	img.className = "country-flag";
+	img.src = flagPath;
+	img.alt = "";
+	img.loading = "lazy";
+	img.decoding = "async";
+	return img;
+}
+
+function countryFlagPath(countryIso) {
+	const code = countryIso.toLowerCase();
+	if (!/^[a-z]{2}$/.test(code)) {
+		return "";
+	}
+	return `/static/flags/4x3/${code}.svg`;
 }
 
 function nodeCell(node) {
@@ -924,12 +918,12 @@ function nonRoutableSummaryCell(row) {
 
 	const wrapper = document.createElement("span");
 	wrapper.className = "non-routable-summary";
-	wrapper.appendChild(document.createTextNode(nonRoutableText(row)));
+	wrapper.appendChild(resultRowText(nonRoutableText(row)));
 
 	const rfc = row.entry.specialUse?.rfc;
 	if (rfc) {
 		const span = document.createElement("span");
-		span.className = "non-routable-rfc";
+		span.className = "result-row-text non-routable-rfc";
 		span.textContent = rfc;
 		wrapper.appendChild(span);
 	}
@@ -942,13 +936,16 @@ function flagsCell(flags, showEmptyMarker = true) {
 	const td = document.createElement("td");
 	if (flags.length === 0) {
 		td.className = "result-empty-cell";
-		td.textContent = showEmptyMarker ? "—" : "";
+		if (showEmptyMarker) {
+			td.appendChild(resultRowText("—"));
+		}
 		return td;
 	}
 	td.className = "result-cell";
 
 	const list = document.createElement("div");
 	list.className = "flag-list";
+	list.dataset.rowContent = "true";
 	for (const flag of flags) {
 		list.appendChild(flagBadge(flag));
 	}
@@ -966,8 +963,8 @@ function flagBadge(label) {
 function kindBadge(kind) {
 	const badge = document.createElement("span");
 	badge.className = "kind-badge";
-	badge.dataset.kind = kind || "Unknown";
-	badge.textContent = kind || "Unknown";
+	badge.dataset.kind = kind;
+	badge.textContent = kind;
 	return badge;
 }
 
@@ -1073,7 +1070,7 @@ function detailGroups(row) {
 
 	if (hasLocationDetail(row)) {
 		groups.push(detailGroup("Location", [
-			detailPair("Country", valueOrDash(countryLabel(row))),
+			detailPair("Country", countryDetail(row)),
 			detailPair("Region", valueOrDash(row.region)),
 			detailPair("City", valueOrDash(row.city)),
 			detailPair("Timezone", entry.geo?.timezone),
@@ -1152,7 +1149,7 @@ function networkRange(network) {
 
 function hasLocationDetail(row) {
 	return Boolean(
-		countryLabel(row) || row.region || row.city || row.entry.geo?.timezone || coordinates(row.entry.geo),
+		row.country || row.region || row.city || row.entry.geo?.timezone || coordinates(row.entry.geo),
 	);
 }
 
@@ -1167,19 +1164,8 @@ function coordinates(geo) {
 	return `${geo.latitude}, ${geo.longitude}`;
 }
 
-function countryLabel(row) {
-	if (!row.country) {
-		return "";
-	}
-	return row.countryEmoji ? `${row.countryEmoji} ${row.country}` : row.country;
-}
-
 function filterRows(rows) {
-	return rows.filter((row) => rowMatchesFilters(row));
-}
-
-function rowMatchesFilters(row) {
-	return rowMatchesFiltersExcept(row, "");
+	return rows.filter((row) => rowMatchesFiltersExcept(row, ""));
 }
 
 function rowMatchesFiltersExcept(row, excludedKey) {
@@ -1215,7 +1201,7 @@ function rowMatchesFlagFilters(row) {
 function sortRows(rows, sort) {
 	const sorted = rows.slice();
 	if (!sort) {
-		return sorted.sort((a, b) => a.index - b.index);
+		return sorted;
 	}
 
 	sorted.sort((a, b) => {
@@ -1494,14 +1480,30 @@ function sortIndicator(key) {
 }
 
 function toggleExpandedRow(index) {
+	const summaryRow = resultsNode.querySelector(`[data-expand-row="${index}"]`);
 	if (state.expandedRows.has(index)) {
 		state.expandedRows.delete(index);
-		renderApp();
+		setSummaryRowExpanded(summaryRow, false);
+		detailRowByIndex(index).remove();
 	} else {
 		state.expandedRows.add(index);
-		renderApp();
+		setSummaryRowExpanded(summaryRow, true);
+		summaryRow.after(renderDetailRow(resultRowByIndex(index)));
 		revealDetailRow(index);
 	}
+}
+
+function setSummaryRowExpanded(row, expanded) {
+	row.dataset.expanded = String(expanded);
+	row.setAttribute("aria-expanded", String(expanded));
+}
+
+function detailRowByIndex(index) {
+	return resultsNode.querySelector(`[data-detail-row="${index}"]`);
+}
+
+function resultRowByIndex(index) {
+	return state.rows.find((row) => row.index === index);
 }
 
 function showError(message) {
@@ -1541,7 +1543,7 @@ function scrollToLookupOutput() {
 
 function revealDetailRow(index) {
 	const row = resultsNode.querySelector(`[data-detail-row="${index}"]`);
-	row?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest", inline: "nearest" });
+	row.scrollIntoView({ behavior: scrollBehavior(), block: "nearest", inline: "nearest" });
 }
 
 function scrollBehavior() {
@@ -1565,14 +1567,6 @@ function emptyState(title, message, tone = "") {
 		wrapper.appendChild(p);
 	}
 	return wrapper;
-}
-
-function buttonElement(label, className) {
-	const button = document.createElement("button");
-	button.type = "button";
-	button.className = className;
-	button.textContent = label;
-	return button;
 }
 
 function formatBytes(bytes) {

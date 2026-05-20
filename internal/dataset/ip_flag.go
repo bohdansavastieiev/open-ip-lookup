@@ -17,11 +17,11 @@ var ipFlagDefs = []struct {
 	label string
 }{
 	{IPFlagVPN, "VPN"},
-	{IPFlagDatacenter, "Data Center"},
+	{IPFlagDatacenter, "Datacenter"},
 	{IPFlagTorExit, "Tor Exit"},
 	{IPFlagTorRelay, "Tor Relay"},
-	{IPFlagProxyHighConf, "Proxy (High Confidence)"},
-	{IPFlagProxyLowConf, "Proxy (Low Confidence)"},
+	{IPFlagProxyHighConf, "Proxy"},
+	{IPFlagProxyLowConf, "Possible Proxy"},
 	{IPFlagLowReputation, "Low Reputation"},
 }
 
