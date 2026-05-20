@@ -53,6 +53,7 @@ func TestLookup_ReturnsServiceReportForSubmittedInput(t *testing.T) {
 	require.True(t, svc.called)
 	assert.Equal(t, "1.1.1.1\n1.1.1.1", svc.raw)
 	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, noStoreCacheControl, res.Header().Get("Cache-Control"))
 
 	var got report.Report
 	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &got))
@@ -111,6 +112,18 @@ func TestHome_RendersLookupBodyLimit(t *testing.T) {
 	assert.Contains(t, res.Body.String(), fmt.Sprintf(`data-max-body-bytes="%v"`, maxLookupBodyBytes))
 }
 
+func TestHome_UsesNoStoreCache(t *testing.T) {
+	svc := &fakeLookupService{}
+	srv := newTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	res := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(res, req)
+
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, noStoreCacheControl, res.Header().Get("Cache-Control"))
+}
+
 func TestHealth_ReturnsOK(t *testing.T) {
 	svc := &fakeLookupService{}
 	srv := newTestServer(t, svc)
@@ -122,6 +135,54 @@ func TestHealth_ReturnsOK(t *testing.T) {
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Equal(t, "text/plain; charset=utf-8", res.Header().Get("Content-Type"))
 	assert.Equal(t, "ok\n", res.Body.String())
+}
+
+func TestStatic_ServesFlagAsset(t *testing.T) {
+	svc := &fakeLookupService{}
+	srv := newTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodGet, "/static/flags/4x3/ua.svg", nil)
+	res := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(res, req)
+
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Header().Get("Content-Type"), "image/svg+xml")
+	assert.Equal(t, staticFlagCacheControl, res.Header().Get("Cache-Control"))
+	assert.Contains(t, res.Body.String(), "<svg")
+}
+
+func TestStatic_ServesAppAssetWithoutLongCache(t *testing.T) {
+	svc := &fakeLookupService{}
+	srv := newTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	res := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(res, req)
+
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, staticCacheControl, res.Header().Get("Cache-Control"))
+}
+
+func TestStatic_DoesNotListDirectories(t *testing.T) {
+	tests := []string{
+		"/static/",
+		"/static/flags/",
+		"/static/flags/4x3/",
+	}
+
+	for _, path := range tests {
+		t.Run(path, func(t *testing.T) {
+			svc := &fakeLookupService{}
+			srv := newTestServer(t, svc)
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			res := httptest.NewRecorder()
+
+			srv.httpServer.Handler.ServeHTTP(res, req)
+
+			assert.Equal(t, http.StatusNotFound, res.Code)
+			assert.NotContains(t, res.Body.String(), "<pre>")
+		})
+	}
 }
 
 func TestSecurityHeaders_AreSet(t *testing.T) {
@@ -140,7 +201,6 @@ func TestSecurityHeaders_AreSet(t *testing.T) {
 		"geolocation=(), microphone=(), camera=()",
 		res.Header().Get("Permissions-Policy"),
 	)
-	assert.Equal(t, "no-store", res.Header().Get("Cache-Control"))
 }
 
 func newTestServer(t *testing.T, svc *fakeLookupService) *Server {

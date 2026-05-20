@@ -27,6 +27,10 @@ const contentSecurityPolicy = "default-src 'self'; " +
 	"form-action 'self'; " +
 	"object-src 'none'"
 
+const noStoreCacheControl = "no-store"
+const staticCacheControl = "no-cache"
+const staticFlagCacheControl = "public, max-age=604800"
+
 //go:embed templates/*
 var templates embed.FS
 
@@ -48,6 +52,10 @@ type service interface {
 type templateData struct {
 	HasMaxMind         bool
 	MaxLookupBodyBytes int
+}
+
+type noDirectoryListingFS struct {
+	fs.FS
 }
 
 func New(cfg config.ServerConfig, service service, logger *slog.Logger) (*Server, error) {
@@ -84,12 +92,36 @@ func (s *Server) setupRoutes(mux *http.ServeMux) error {
 		return err
 	}
 
-	mux.HandleFunc("GET /{$}", s.handleHome)
-	mux.HandleFunc("GET /healthz", s.handleHealth)
-	mux.HandleFunc("POST /lookup", s.handleLookup)
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot))))
+	staticHandler := http.StripPrefix(
+		"/static/",
+		http.FileServer(http.FS(noDirectoryListingFS{FS: staticRoot})),
+	)
+	mux.Handle("GET /{$}", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHome)))
+	mux.Handle("GET /healthz", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHealth)))
+	mux.Handle("POST /lookup", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleLookup)))
+	mux.Handle("GET /static/flags/", cacheControl(staticFlagCacheControl, staticHandler))
+	mux.Handle("GET /static/", cacheControl(staticCacheControl, staticHandler))
 
 	return nil
+}
+
+func (f noDirectoryListingFS) Open(name string) (fs.File, error) {
+	file, err := f.FS.Open(name)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if info.IsDir() {
+		_ = file.Close()
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
+
+	return file, nil
 }
 
 func (s *Server) ListenAndServe() error {
@@ -160,7 +192,13 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		h.Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func cacheControl(value string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", value)
 		next.ServeHTTP(w, r)
 	})
 }
