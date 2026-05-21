@@ -99,6 +99,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /{$}", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHome)))
 	mux.Handle("GET /healthz", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHealth)))
 	mux.Handle("POST /api/lookup", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleLookup)))
+	mux.Handle("GET /api/client-ip", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleClientIPLookup)))
 	mux.Handle("GET /static/flags/", cacheControl(staticFlagCacheControl, staticHandler))
 	mux.Handle("GET /static/", cacheControl(staticCacheControl, staticHandler))
 
@@ -172,6 +173,12 @@ func (s *Server) handleLookup(w http.ResponseWriter, r *http.Request) {
 		slog.Int("reported", rpt.Stats.Reported),
 	)
 
+	writeJSON(w, http.StatusOK, rpt)
+}
+
+func (s *Server) handleClientIPLookup(w http.ResponseWriter, r *http.Request) {
+	clientIP := cloudflareClientIP(r)
+	rpt := s.service.Report(clientIP)
 	writeJSON(w, http.StatusOK, rpt)
 }
 

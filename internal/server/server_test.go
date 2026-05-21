@@ -75,6 +75,44 @@ func TestLookup_RejectsOversizedBodyBeforeService(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, res.Code)
 }
 
+func TestClientIPLookup_ReturnsServiceReportForCloudflareIP(t *testing.T) {
+	svc := &fakeLookupService{
+		report: &report.Report{
+			Stats:   report.Stats{Total: 1, Unique: 1, Reported: 1},
+			Entries: []report.Entry{{IP: "203.0.113.10", Kind: "Routable"}},
+		},
+	}
+	srv := newTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/client-ip", nil)
+	req.Header.Set("CF-Connecting-IP", "203.0.113.10")
+	res := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(res, req)
+
+	require.True(t, svc.called)
+	assert.Equal(t, "203.0.113.10", svc.raw)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, noStoreCacheControl, res.Header().Get("Cache-Control"))
+
+	var got report.Report
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &got))
+	assert.Equal(t, *svc.report, got)
+}
+
+func TestClientIPLookup_FallsBackToRemoteAddress(t *testing.T) {
+	svc := &fakeLookupService{report: &report.Report{}}
+	srv := newTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/client-ip", nil)
+	req.RemoteAddr = "198.51.100.3:12345"
+	res := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(res, req)
+
+	require.True(t, svc.called)
+	assert.Equal(t, "198.51.100.3", svc.raw)
+	assert.Equal(t, http.StatusOK, res.Code)
+}
+
 func TestHome_RendersMaxMindAttributionWhenAvailable(t *testing.T) {
 	tests := []struct {
 		name       string
