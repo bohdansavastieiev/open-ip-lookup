@@ -98,7 +98,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux) error {
 	)
 	mux.Handle("GET /{$}", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHome)))
 	mux.Handle("GET /healthz", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHealth)))
-	mux.Handle("POST /lookup", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleLookup)))
+	mux.Handle("POST /api/lookup", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleLookup)))
 	mux.Handle("GET /static/flags/", cacheControl(staticFlagCacheControl, staticHandler))
 	mux.Handle("GET /static/", cacheControl(staticCacheControl, staticHandler))
 

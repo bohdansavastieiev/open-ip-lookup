@@ -44,7 +44,7 @@ func TestLookup_ReturnsServiceReportForSubmittedInput(t *testing.T) {
 	srv := newTestServer(t, svc)
 
 	form := url.Values{"input": {"1.1.1.1\n1.1.1.1"}}
-	req := httptest.NewRequest(http.MethodPost, "/lookup", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/lookup", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res := httptest.NewRecorder()
 
@@ -65,7 +65,7 @@ func TestLookup_RejectsOversizedBodyBeforeService(t *testing.T) {
 	srv := newTestServer(t, svc)
 
 	body := "input=" + strings.Repeat("x", maxLookupBodyBytes)
-	req := httptest.NewRequest(http.MethodPost, "/lookup", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/lookup", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res := httptest.NewRecorder()
 
