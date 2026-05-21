@@ -1736,7 +1736,16 @@ function setBusy(isBusy) {
 
 function updateFormState() {
 	updateInputSize();
+	resizeLookupInput();
 	submitButton.disabled = state.isBusy || inputNode.value.trim() === "";
+}
+
+function resizeLookupInput() {
+	inputNode.style.height = "auto";
+	const maxHeight = Number.parseFloat(getComputedStyle(inputNode).maxHeight);
+	const nextHeight = Math.min(inputNode.scrollHeight, maxHeight);
+	inputNode.style.height = `${nextHeight}px`;
+	inputNode.style.overflowY = inputNode.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function updateInputSize() {
