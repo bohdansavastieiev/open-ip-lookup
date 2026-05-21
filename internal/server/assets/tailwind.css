@@ -12,9 +12,14 @@
   }
 
   .page-shell {
-    @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
+    @apply relative isolate min-h-screen bg-slate-950 text-slate-100 antialiased;
+  }
+
+  .page-shell::before {
+    @apply pointer-events-none fixed inset-0 -z-10 content-[''];
     background-image:
-      radial-gradient(ellipse 42rem 120rem at 50% 45%, rgb(6 182 212 / 0.14), transparent 70%);
+      radial-gradient(ellipse 42rem 120rem at 50% 24rem, rgb(6 182 212 / 0.08), transparent 70%),
+      linear-gradient(90deg, transparent, rgb(6 182 212 / 0.05), transparent);
   }
 
   .page-layout {
