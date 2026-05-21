@@ -236,6 +236,71 @@
     @apply mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500;
   }
 
+  .client-ip-card {
+    @apply overflow-hidden rounded-3xl border border-slate-800 bg-slate-950;
+    @apply shadow-2xl shadow-slate-950/40;
+  }
+
+  .client-ip-header {
+    @apply grid gap-5 border-b border-slate-800 bg-slate-950 p-5;
+  }
+
+  .client-ip-copy {
+    @apply min-w-0;
+  }
+
+  .client-ip-label {
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-slate-500;
+  }
+
+  .client-ip-main-line {
+    @apply mt-2 flex min-w-0 flex-wrap items-start gap-y-3;
+    column-gap: 3rem;
+  }
+
+  .client-ip-address {
+    @apply font-mono text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .client-ip-meta {
+    @apply mt-1 font-mono text-xs text-slate-500;
+  }
+
+  .client-ip-flags {
+    @apply flex min-w-0 flex-wrap items-start gap-2;
+  }
+
+  .client-ip-kind {
+    @apply flex min-w-0 items-start;
+  }
+
+  .client-ip-flags .flag-list {
+    @apply gap-2;
+  }
+
+  .client-ip-flags .flag-badge {
+    @apply px-4 py-1.5 text-sm;
+    min-height: 2rem;
+    line-height: 1rem;
+  }
+
+  .client-ip-kind .kind-badge {
+    @apply px-4 py-1.5 text-sm;
+    min-height: 2rem;
+    line-height: 1rem;
+  }
+
+  .client-ip-details {
+    @apply p-4;
+  }
+
+  .client-ip-section-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+
   .results-wrapper {
     @apply overflow-hidden rounded-3xl border border-slate-800 bg-slate-950;
     @apply shadow-2xl shadow-slate-950/40;

@@ -43,6 +43,7 @@ const textEncoder = new TextEncoder();
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 const state = {
+	mode: "client",
 	report: null,
 	rows: [],
 	sort: null,
@@ -61,6 +62,7 @@ resultsNode.addEventListener("click", handleResultsClick);
 document.addEventListener("click", handleDocumentClick);
 
 renderInitialState();
+loadClientIPReport();
 updateFormState();
 
 async function handleLookupSubmit(event) {
@@ -79,6 +81,7 @@ async function handleLookupSubmit(event) {
 		return;
 	}
 
+	state.mode = "lookup";
 	setBusy(true);
 	hideStatus();
 	try {
@@ -91,6 +94,23 @@ async function handleLookupSubmit(event) {
 		showError(err.message);
 	} finally {
 		setBusy(false);
+	}
+}
+
+async function loadClientIPReport() {
+	try {
+		const report = await clientIPLookup();
+		if (state.mode !== "client") {
+			return;
+		}
+
+		loadReport(report);
+		renderClientIPReport();
+	} catch (err) {
+		if (state.mode !== "client") {
+			return;
+		}
+		renderClientIPError(err.message);
 	}
 }
 
@@ -194,6 +214,18 @@ async function lookup(body) {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
 		body,
+	});
+
+	if (!response.ok) {
+		throw new Error(await responseErrorMessage(response));
+	}
+
+	return response.json();
+}
+
+async function clientIPLookup() {
+	const response = await fetch("/api/client-ip", {
+		headers: { Accept: "application/json" },
 	});
 
 	if (!response.ok) {
@@ -311,7 +343,177 @@ function parseIPv4Hextets(ip) {
 function renderInitialState() {
 	hideStatus();
 	controlsNode.hidden = true;
-	resultsNode.replaceChildren(emptyState("Results will appear here", "", "quiet"));
+	resultsNode.className = "results-min-height";
+	resultsNode.replaceChildren(emptyState("Loading your IP information...", "", "quiet"));
+}
+
+function renderClientIPReport() {
+	controlsNode.replaceChildren();
+	controlsNode.hidden = true;
+	resultsNode.replaceChildren();
+	resultsNode.className = "results-min-height";
+
+	const row = state.rows[0];
+	if (!row) {
+		resultsNode.appendChild(emptyState(
+			"Your IP information is unavailable",
+			"The server could not detect a valid IP address for this request.",
+		));
+		return;
+	}
+
+	resultsNode.appendChild(renderClientIPCard(row));
+}
+
+function renderClientIPError(message) {
+	controlsNode.replaceChildren();
+	controlsNode.hidden = true;
+	resultsNode.className = "results-min-height";
+	resultsNode.replaceChildren(emptyState(
+		"Your IP information is unavailable",
+		`${message} Bulk lookup is still available.`,
+	));
+}
+
+function renderClientIPCard(row) {
+	const card = document.createElement("article");
+	card.className = "client-ip-card";
+	card.appendChild(renderClientIPHeader(row));
+
+	const details = renderClientIPDetails(row);
+	if (details) {
+		card.appendChild(details);
+	}
+	return card;
+}
+
+function renderClientIPHeader(row) {
+	const header = document.createElement("header");
+	header.className = "client-ip-header";
+
+	const copy = document.createElement("div");
+	copy.className = "client-ip-copy";
+
+	const label = document.createElement("p");
+	label.className = "client-ip-label";
+	label.textContent = "Your IP address";
+
+	const address = document.createElement("h2");
+	address.className = "client-ip-address";
+	address.textContent = row.ip;
+
+	const line = document.createElement("div");
+	line.className = "client-ip-main-line";
+	line.appendChild(address);
+
+	const flags = renderClientIPFlags(row.flags);
+	if (flags) {
+		line.appendChild(flags);
+	}
+	if (row.kind !== IP_KIND.routable) {
+		line.appendChild(renderClientIPKind(row.kind));
+	}
+
+	copy.append(label, line, renderClientIPMeta(row));
+	header.appendChild(copy);
+	return header;
+}
+
+function renderClientIPMeta(row) {
+	const meta = document.createElement("p");
+	meta.className = "client-ip-meta";
+	meta.textContent = row.family;
+	return meta;
+}
+
+function renderClientIPKind(kind) {
+	const wrapper = document.createElement("div");
+	wrapper.className = "client-ip-kind";
+	wrapper.appendChild(kindBadge(kind));
+	return wrapper;
+}
+
+function renderClientIPFlags(flags) {
+	if (flags.length === 0) {
+		return null;
+	}
+
+	const wrapper = document.createElement("div");
+	wrapper.className = "client-ip-flags";
+
+	const list = document.createElement("div");
+	list.className = "flag-list";
+	for (const flag of flags) {
+		list.appendChild(flagBadge(flag));
+	}
+
+	wrapper.appendChild(list);
+	return wrapper;
+}
+
+function renderClientIPDetails(row) {
+	const groups = clientIPGroups(row);
+	if (groups.length === 0) {
+		return null;
+	}
+
+	const details = document.createElement("div");
+	details.className = "client-ip-details";
+
+	const grid = document.createElement("div");
+	grid.className = "client-ip-section-grid";
+	for (const group of groups) {
+		grid.appendChild(renderDetailGroup(group));
+	}
+	details.appendChild(grid);
+	return details;
+}
+
+function clientIPGroups(row) {
+	const entry = row.entry;
+	const groups = [];
+	const nonRoutableGroup = clientIPNonRoutableGroup(row);
+	if (nonRoutableGroup) {
+		groups.push(nonRoutableGroup);
+	}
+
+	if (hasLocationDetail(row)) {
+		groups.push(detailGroup("Location", [
+			detailPair("Country", countryDetail(row)),
+			detailPair("Region", valueOrDash(row.region)),
+			detailPair("City", valueOrDash(row.city)),
+			detailPair("Timezone", entry.geo?.timezone),
+			detailPair("Coordinates", coordinates(entry.geo)),
+		]));
+	}
+
+	groups.push(detailGroup("Network", [
+		detailPair("ASN", row.asn),
+		detailPair("Organization", row.organization),
+		detailPair("Registry handle", entry.asn?.registryHandle),
+		detailPair("ASN country", entry.asn?.country),
+		detailPair("Category", entry.asn?.category),
+		detailPair("Network role", entry.asn?.networkRole),
+		detailPair("Network prefix", entry.asn?.network?.prefix),
+		detailPair("Network range", networkRange(entry.asn?.network)),
+	]));
+
+	groups.push(detailGroup("Signals", providerSignalPairs(row)));
+	return groups.filter((group) => group.pairs.length > 0);
+}
+
+function clientIPNonRoutableGroup(row) {
+	const entry = row.entry;
+	if (row.kind === IP_KIND.routable) {
+		return null;
+	}
+	if (entry.specialUse) {
+		return detailGroup("Special use", [
+			detailPair("Name", entry.specialUse.name),
+			detailPair("RFC", entry.specialUse.rfc),
+		]);
+	}
+	return detailGroup("Routing", [detailPair("Status", nonRoutableText(row))]);
 }
 
 function renderApp() {
@@ -1058,15 +1260,13 @@ function renderDetailPair(label, value) {
 
 function detailGroups(row) {
 	const entry = row.entry;
-	const groups = [];
-
-	groups.push(detailGroup("General", [
+	const groups = [detailGroup("General", [
 		detailPair("Address", row.ip),
 		detailPair("Version", row.family),
 		detailPair("Kind", row.kind),
 		detailPair("Input occurrences", occurrenceDetail(row.occurrences)),
 		...signalDetails(row),
-	]));
+	])];
 
 	if (hasLocationDetail(row)) {
 		groups.push(detailGroup("Location", [
@@ -1093,19 +1293,28 @@ function detailGroups(row) {
 }
 
 function signalDetails(row) {
-	const entry = row.entry;
-	const pairs = [detailPair("Flags", flagsDetail(row.flags))];
-	pairs.push(
-		detailPair("Cloud provider", entry.cloud?.provider),
-		detailPair("Cloud service", entry.cloud?.service),
-		detailPair("Cloud region", entry.cloud?.region),
-		detailPair("VPN provider", entry.vpnProvider),
-	);
-
+	const pairs = signalPairs(row);
 	if (!pairs.some((pair) => hasDetailValue(pair.value))) {
 		return [];
 	}
 	return [detailSubheading("Signals"), ...pairs];
+}
+
+function signalPairs(row) {
+	return [
+		detailPair("Flags", flagsDetail(row.flags)),
+		...providerSignalPairs(row),
+	];
+}
+
+function providerSignalPairs(row) {
+	const entry = row.entry;
+	return [
+		detailPair("Cloud provider", entry.cloud?.provider),
+		detailPair("Cloud service", entry.cloud?.service),
+		detailPair("Cloud region", entry.cloud?.region),
+		detailPair("VPN provider", entry.vpnProvider),
+	];
 }
 
 function flagsDetail(flags) {
