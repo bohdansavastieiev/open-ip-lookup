@@ -36,6 +36,14 @@
     @apply mt-3 text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl;
   }
 
+  .hero-brand {
+    @apply inline-flex min-w-0 items-center gap-3 text-slate-50 hover:text-slate-50;
+  }
+
+  .hero-logo {
+    @apply h-11 w-11 shrink-0 rounded-xl border border-slate-700 sm:h-12 sm:w-12;
+  }
+
   .hero-copy {
     @apply mt-3 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base;
   }
