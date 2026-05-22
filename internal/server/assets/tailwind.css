@@ -375,11 +375,11 @@
   }
 
   .results-column-occurrences {
-    width: 8%;
+    width: 7%;
   }
 
   .results-column-country {
-    width: 12%;
+    width: 13%;
   }
 
   .results-column-region {
@@ -391,11 +391,11 @@
   }
 
   .results-column-asn {
-    width: 10%;
+    width: 9%;
   }
 
   .results-column-organization {
-    width: 17%;
+    width: 18%;
   }
 
   .results-column-flags {
@@ -407,8 +407,16 @@
   }
 
   .results-heading-cell {
-    @apply whitespace-normal px-4 py-2.5 font-semibold;
+    @apply whitespace-normal px-3 py-2.5 font-semibold;
     overflow-wrap: anywhere;
+  }
+
+  .results-heading-cell:first-child {
+    @apply pl-4;
+  }
+
+  .results-heading-cell:last-child {
+    @apply pr-4;
   }
 
   .sort-header-button {
@@ -449,18 +457,26 @@
   }
 
   .result-cell {
-    @apply px-4 py-3 align-middle text-slate-300;
+    @apply px-3 py-3 align-middle text-slate-300;
     overflow-wrap: anywhere;
     white-space: normal;
   }
 
   .result-text-cell {
-    @apply min-w-0 px-4 py-3 align-middle text-slate-300;
+    @apply min-w-0 px-3 py-3 align-middle text-slate-300;
     overflow-wrap: anywhere;
   }
 
   .result-empty-cell {
-    @apply px-4 py-3 align-middle text-slate-600;
+    @apply px-3 py-3 align-middle text-slate-600;
+  }
+
+  .result-row > td:first-child {
+    @apply pl-4;
+  }
+
+  .result-row > td:last-child {
+    @apply pr-4;
   }
 
   .country-value {
@@ -549,7 +565,7 @@
   }
 
   .detail-item {
-    @apply grid min-w-0 gap-3;
+    @apply grid min-w-0 items-baseline gap-3;
     grid-template-columns: 6.5rem minmax(0, 1fr);
   }
 
@@ -558,11 +574,11 @@
   }
 
   .detail-label {
-    @apply text-xs font-medium text-slate-500;
+    @apply text-xs font-medium leading-5 text-slate-500;
   }
 
   .detail-value {
-    @apply min-w-0 text-sm text-slate-200;
+    @apply min-w-0 text-sm leading-5 text-slate-200;
     overflow-wrap: break-word;
   }
 
