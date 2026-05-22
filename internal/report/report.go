@@ -24,12 +24,15 @@ type Stats struct {
 }
 
 type Entry struct {
+	IPInfo
+	Occurrences int `json:"occurrences"`
+}
+
+type IPInfo struct {
 	IP          string      `json:"ip"`
-	Occurrences int         `json:"occurrences"`
 	IsIPv6      bool        `json:"isIpv6"`
 	Kind        string      `json:"kind"`
 	Flags       []string    `json:"flags"`
-	HasDetails  bool        `json:"hasDetails"`
 	SpecialUse  *SpecialUse `json:"specialUse,omitempty"`
 	Geo         *Geo        `json:"geo,omitempty"`
 	ASN         *ASN        `json:"asn,omitempty"`
@@ -58,7 +61,6 @@ type ASN struct {
 	Organization   string   `json:"organization,omitempty"`
 	RegistryHandle string   `json:"registryHandle,omitempty"`
 	Country        string   `json:"country,omitempty"`
-	CountryISO     string   `json:"countryIso,omitempty"`
 	Category       string   `json:"category,omitempty"`
 	NetworkRole    string   `json:"networkRole,omitempty"`
 	Network        *Network `json:"network,omitempty"`
@@ -98,12 +100,22 @@ func Get(raw string, ds *dataset.Dataset) *Report {
 	}
 }
 
+func InfoForIP(ip netip.Addr, ds *dataset.Dataset) IPInfo {
+	return buildIPInfo(ip, ds.Lookup(ip))
+}
+
 func buildEntry(ip netip.Addr, occurrences int, r dataset.IPResult) Entry {
-	e := Entry{
-		IP:          ip.String(),
+	return Entry{
+		IPInfo:      buildIPInfo(ip, r),
 		Occurrences: occurrences,
-		IsIPv6:      ip.Is6(),
-		Kind:        r.Kind.Label(),
+	}
+}
+
+func buildIPInfo(ip netip.Addr, r dataset.IPResult) IPInfo {
+	e := IPInfo{
+		IP:     ip.String(),
+		IsIPv6: ip.Is6(),
+		Kind:   r.Kind.Label(),
 	}
 	if r.Kind == dataset.IPKindRoutable {
 		e.Flags = flagLabels(r.Flags)
@@ -135,7 +147,6 @@ func buildEntry(ip netip.Addr, occurrences int, r dataset.IPResult) Entry {
 			Organization:   asnOrganization(r.ASN),
 			RegistryHandle: asnRegistryHandle(r.ASN),
 			Country:        r.ASN.Country,
-			CountryISO:     r.ASN.CountryISO,
 			Category:       humanize(r.ASN.Category),
 			NetworkRole:    humanize(r.ASN.NetworkRole),
 			Network:        networkInfo(r.ASN.Network),
@@ -151,8 +162,6 @@ func buildEntry(ip netip.Addr, occurrences int, r dataset.IPResult) Entry {
 	}
 
 	e.VPNProvider = r.VPNProvider
-	e.HasDetails = e.Geo != nil || e.ASN != nil || e.Cloud != nil ||
-		e.VPNProvider != "" || len(e.Flags) > 0
 
 	return e
 }

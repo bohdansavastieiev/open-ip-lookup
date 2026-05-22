@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -148,6 +149,13 @@ func (m *Manager) Report(raw string) *report.Report {
 	defer m.mu.RUnlock()
 
 	return report.Get(raw, m.dataset)
+}
+
+func (m *Manager) LookupIP(ip netip.Addr) report.IPInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return report.InfoForIP(ip, m.dataset)
 }
 
 func (m *Manager) Close() error {

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/config"
@@ -47,6 +48,7 @@ type Server struct {
 type service interface {
 	HasMaxMind() bool
 	Report(string) *report.Report
+	LookupIP(netip.Addr) report.IPInfo
 }
 
 type templateData struct {
@@ -166,7 +168,7 @@ func (s *Server) handleLookup(w http.ResponseWriter, r *http.Request) {
 	rpt := s.service.Report(r.Form.Get("input"))
 	s.logger.Info(
 		"lookup completed",
-		slog.String("client_ip", cloudflareClientIP(r)),
+		slog.String("client_ip", clientIPText(r)),
 		slog.Duration("duration", time.Since(startedAt)),
 		slog.Int("total", rpt.Stats.Total),
 		slog.Int("unique", rpt.Stats.Unique),
@@ -177,9 +179,13 @@ func (s *Server) handleLookup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleClientIPLookup(w http.ResponseWriter, r *http.Request) {
-	clientIP := cloudflareClientIP(r)
-	rpt := s.service.Report(clientIP)
-	writeJSON(w, http.StatusOK, rpt)
+	ip, err := clientIP(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid client IP")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, s.service.LookupIP(ip))
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -210,7 +216,11 @@ func cacheControl(value string, next http.Handler) http.Handler {
 	})
 }
 
-func cloudflareClientIP(r *http.Request) string {
+func clientIP(r *http.Request) (netip.Addr, error) {
+	return netip.ParseAddr(clientIPText(r))
+}
+
+func clientIPText(r *http.Request) string {
 	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
 		return ip
 	}

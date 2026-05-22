@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
@@ -18,10 +19,13 @@ import (
 )
 
 type fakeLookupService struct {
-	hasMaxMind bool
-	report     *report.Report
-	raw        string
-	called     bool
+	hasMaxMind   bool
+	report       *report.Report
+	ipInfo       report.IPInfo
+	reportInput  string
+	reportCalled bool
+	lookupIP     netip.Addr
+	lookupCalled bool
 }
 
 func (s *fakeLookupService) HasMaxMind() bool {
@@ -29,16 +33,22 @@ func (s *fakeLookupService) HasMaxMind() bool {
 }
 
 func (s *fakeLookupService) Report(raw string) *report.Report {
-	s.called = true
-	s.raw = raw
+	s.reportCalled = true
+	s.reportInput = raw
 	return s.report
+}
+
+func (s *fakeLookupService) LookupIP(ip netip.Addr) report.IPInfo {
+	s.lookupCalled = true
+	s.lookupIP = ip
+	return s.ipInfo
 }
 
 func TestLookup_ReturnsServiceReportForSubmittedInput(t *testing.T) {
 	svc := &fakeLookupService{
 		report: &report.Report{
 			Stats:   report.Stats{Total: 2, Unique: 1, Reported: 1},
-			Entries: []report.Entry{{IP: "1.1.1.1", Kind: "Routable"}},
+			Entries: []report.Entry{{IPInfo: report.IPInfo{IP: "1.1.1.1", Kind: "Routable"}}},
 		},
 	}
 	srv := newTestServer(t, svc)
@@ -50,8 +60,8 @@ func TestLookup_ReturnsServiceReportForSubmittedInput(t *testing.T) {
 
 	srv.httpServer.Handler.ServeHTTP(res, req)
 
-	require.True(t, svc.called)
-	assert.Equal(t, "1.1.1.1\n1.1.1.1", svc.raw)
+	require.True(t, svc.reportCalled)
+	assert.Equal(t, "1.1.1.1\n1.1.1.1", svc.reportInput)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Equal(t, noStoreCacheControl, res.Header().Get("Cache-Control"))
 
@@ -71,16 +81,13 @@ func TestLookup_RejectsOversizedBodyBeforeService(t *testing.T) {
 
 	srv.httpServer.Handler.ServeHTTP(res, req)
 
-	assert.False(t, svc.called)
+	assert.False(t, svc.reportCalled)
 	assert.Equal(t, http.StatusRequestEntityTooLarge, res.Code)
 }
 
-func TestClientIPLookup_ReturnsServiceReportForCloudflareIP(t *testing.T) {
+func TestClientIPLookup_ReturnsIPInfoForCloudflareIP(t *testing.T) {
 	svc := &fakeLookupService{
-		report: &report.Report{
-			Stats:   report.Stats{Total: 1, Unique: 1, Reported: 1},
-			Entries: []report.Entry{{IP: "203.0.113.10", Kind: "Routable"}},
-		},
+		ipInfo: report.IPInfo{IP: "203.0.113.10", Kind: "Routable"},
 	}
 	srv := newTestServer(t, svc)
 	req := httptest.NewRequest(http.MethodGet, "/api/client-ip", nil)
@@ -89,18 +96,19 @@ func TestClientIPLookup_ReturnsServiceReportForCloudflareIP(t *testing.T) {
 
 	srv.httpServer.Handler.ServeHTTP(res, req)
 
-	require.True(t, svc.called)
-	assert.Equal(t, "203.0.113.10", svc.raw)
+	require.True(t, svc.lookupCalled)
+	assert.Equal(t, netip.MustParseAddr("203.0.113.10"), svc.lookupIP)
+	assert.False(t, svc.reportCalled)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Equal(t, noStoreCacheControl, res.Header().Get("Cache-Control"))
 
-	var got report.Report
+	var got report.IPInfo
 	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &got))
-	assert.Equal(t, *svc.report, got)
+	assert.Equal(t, svc.ipInfo, got)
 }
 
 func TestClientIPLookup_FallsBackToRemoteAddress(t *testing.T) {
-	svc := &fakeLookupService{report: &report.Report{}}
+	svc := &fakeLookupService{ipInfo: report.IPInfo{IP: "198.51.100.3", Kind: "Routable"}}
 	srv := newTestServer(t, svc)
 	req := httptest.NewRequest(http.MethodGet, "/api/client-ip", nil)
 	req.RemoteAddr = "198.51.100.3:12345"
@@ -108,9 +116,24 @@ func TestClientIPLookup_FallsBackToRemoteAddress(t *testing.T) {
 
 	srv.httpServer.Handler.ServeHTTP(res, req)
 
-	require.True(t, svc.called)
-	assert.Equal(t, "198.51.100.3", svc.raw)
+	require.True(t, svc.lookupCalled)
+	assert.Equal(t, netip.MustParseAddr("198.51.100.3"), svc.lookupIP)
+	assert.False(t, svc.reportCalled)
 	assert.Equal(t, http.StatusOK, res.Code)
+}
+
+func TestClientIPLookup_RejectsInvalidDetectedIP(t *testing.T) {
+	svc := &fakeLookupService{}
+	srv := newTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/client-ip", nil)
+	req.Header.Set("CF-Connecting-IP", "invalid")
+	res := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(res, req)
+
+	assert.False(t, svc.lookupCalled)
+	assert.False(t, svc.reportCalled)
+	assert.Equal(t, http.StatusBadRequest, res.Code)
 }
 
 func TestHome_RendersMaxMindAttributionWhenAvailable(t *testing.T) {

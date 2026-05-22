@@ -99,12 +99,12 @@ async function handleLookupSubmit(event) {
 
 async function loadClientIPReport() {
 	try {
-		const report = await clientIPLookup();
+		const info = await clientIPLookup();
 		if (state.mode !== "client") {
 			return;
 		}
 
-		loadReport(report);
+		loadClientIPInfo(info);
 		renderClientIPReport();
 	} catch (err) {
 		if (state.mode !== "client") {
@@ -248,6 +248,16 @@ async function responseErrorMessage(response) {
 function loadReport(report) {
 	state.report = report;
 	state.rows = normalizeReport(report);
+	resetResultInteractionState();
+}
+
+function loadClientIPInfo(info) {
+	state.report = null;
+	state.rows = [normalizeIPInfo(info, 0)];
+	resetResultInteractionState();
+}
+
+function resetResultInteractionState() {
 	state.sort = null;
 	state.filters = new Map();
 	state.flagFilters = new Set();
@@ -256,26 +266,31 @@ function loadReport(report) {
 }
 
 function normalizeReport(report) {
-	return report.entries.map((entry, index) => normalizeEntry(entry, index));
+	return report.entries.map((entry, index) => normalizeReportEntry(entry, index));
 }
 
-function normalizeEntry(entry, index) {
-	const flags = entry.flags || [];
+function normalizeReportEntry(entry, index) {
+	const row = normalizeIPInfo(entry, index);
+	row.occurrences = entry.occurrences;
+	return row;
+}
+
+function normalizeIPInfo(info, index) {
+	const flags = info.flags || [];
 	return {
 		index,
-		entry,
-		ip: entry.ip,
-		occurrences: entry.occurrences,
-		ipSortKey: parseIPSortKey(entry.ip),
-		family: entry.isIpv6 ? "IPv6" : "IPv4",
-		kind: value(entry.kind),
-		country: value(entry.geo?.country),
-		countryIso: value(entry.geo?.countryIso),
-		region: value(entry.geo?.region),
-		city: value(entry.geo?.city),
-		asn: asnLabel(entry.asn),
-		asnNumber: entry.asn?.number || 0,
-		organization: value(entry.asn?.organization),
+		entry: info,
+		ip: info.ip,
+		ipSortKey: parseIPSortKey(info.ip),
+		family: info.isIpv6 ? "IPv6" : "IPv4",
+		kind: value(info.kind),
+		country: value(info.geo?.country),
+		countryIso: value(info.geo?.countryIso),
+		region: value(info.geo?.region),
+		city: value(info.geo?.city),
+		asn: asnLabel(info.asn),
+		asnNumber: info.asn?.number || 0,
+		organization: value(info.asn?.organization),
 		flags,
 		flagSet: new Set(flags),
 	};

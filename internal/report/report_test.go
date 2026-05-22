@@ -99,7 +99,6 @@ func TestBuildEntry_ASNZeroReturnsNoASN(t *testing.T) {
 	})
 
 	assert.Nil(t, entry.ASN)
-	assert.False(t, entry.HasDetails)
 }
 
 func TestBuildEntry_EmptyGeoReturnsNoGeo(t *testing.T) {
@@ -108,16 +107,6 @@ func TestBuildEntry_EmptyGeoReturnsNoGeo(t *testing.T) {
 	})
 
 	assert.Nil(t, entry.Geo)
-	assert.False(t, entry.HasDetails)
-}
-
-func TestBuildEntry_SetsHasDetails(t *testing.T) {
-	entry := buildEntry(netip.MustParseAddr("1.2.3.4"), 1, dataset.IPResult{
-		Geo: &dataset.GeoInfo{CountryISO: "US"},
-	})
-
-	assert.NotNil(t, entry.Geo)
-	assert.True(t, entry.HasDetails)
 }
 
 func TestBuildEntry_ASNOrganizationAndRegistryHandle(t *testing.T) {
