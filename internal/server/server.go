@@ -28,9 +28,11 @@ const contentSecurityPolicy = "default-src 'self'; " +
 	"form-action 'self'; " +
 	"object-src 'none'"
 
-const noStoreCacheControl = "no-store"
-const staticCacheControl = "no-cache"
-const staticFlagCacheControl = "public, max-age=604800"
+const (
+	noStoreCacheControl    = "no-store"
+	staticCacheControl     = "no-cache"
+	staticFlagCacheControl = "public, max-age=604800"
+)
 
 //go:embed templates/*
 var templates embed.FS
