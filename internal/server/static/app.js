@@ -52,6 +52,9 @@ const state = {
 	expandedRows: new Set(),
 	openFilterKey: null,
 	isBusy: false,
+	lastLookupInput: null,
+	lastLookupBody: null,
+	lastLookupReport: null,
 };
 
 form.addEventListener("submit", handleLookupSubmit);
@@ -74,10 +77,16 @@ async function handleLookupSubmit(event) {
 		return;
 	}
 
+	const input = inputNode.value;
 	const body = encodedFormBody(form);
 	const maxBodyBytes = maxLookupBodyBytes();
 	if (byteLength(body) > maxBodyBytes) {
 		showError(`Input is too large. Limit: ${formatBytes(maxBodyBytes)}.`);
+		return;
+	}
+	if (matchesLastLookup(input, body)) {
+		hideStatus();
+		scrollToLookupOutput();
 		return;
 	}
 
@@ -86,6 +95,7 @@ async function handleLookupSubmit(event) {
 	hideStatus();
 	try {
 		const report = await lookup(body);
+		rememberLookup(input, body, report);
 		loadReport(report);
 		renderApp();
 		hideStatus();
@@ -199,6 +209,16 @@ function isResultRowToggleTarget(target, row) {
 
 function encodedFormBody(formNode) {
 	return new URLSearchParams(new FormData(formNode)).toString();
+}
+
+function matchesLastLookup(input, body) {
+	return input === state.lastLookupInput && body === state.lastLookupBody;
+}
+
+function rememberLookup(input, body, report) {
+	state.lastLookupInput = input;
+	state.lastLookupBody = body;
+	state.lastLookupReport = report;
 }
 
 function byteLength(value) {
@@ -1752,7 +1772,14 @@ function setBusy(isBusy) {
 function updateFormState() {
 	updateInputSize();
 	resizeLookupInput();
-	submitButton.disabled = state.isBusy || inputNode.value.trim() === "";
+	submitButton.disabled = !canSubmitLookup();
+}
+
+function canSubmitLookup() {
+	if (state.isBusy || inputNode.value.trim() === "") {
+		return false;
+	}
+	return !matchesLastLookup(inputNode.value, encodedFormBody(form));
 }
 
 function resizeLookupInput() {
