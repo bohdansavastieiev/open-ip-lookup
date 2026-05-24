@@ -168,7 +168,7 @@ func (u *Updater) refreshWithRetries(
 			u.httpClient,
 			definition,
 			current,
-			updateDirPath(u.cfg.DataDir),
+			updateDirPath(u.sourceDataDir),
 		)
 		if err != nil {
 			return sourceUpdateResult{}, err

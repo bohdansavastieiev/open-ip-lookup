@@ -22,16 +22,18 @@ const (
 var shortRetryDelays = []time.Duration{firstShortRetryDelay, secondShortRetryDelay}
 
 type Updater struct {
-	cfg        config.SourcesConfig
-	logger     *slog.Logger
-	httpClient *http.Client
+	cfg           config.SourcesConfig
+	logger        *slog.Logger
+	httpClient    *http.Client
+	sourceDataDir string
 }
 
 func New(cfg config.SourcesConfig, logger *slog.Logger) *Updater {
 	return &Updater{
-		cfg:        cfg,
-		logger:     logger,
-		httpClient: newSourceHTTPClient(),
+		cfg:           cfg,
+		logger:        logger,
+		httpClient:    newSourceHTTPClient(),
+		sourceDataDir: cfg.SourceDataDir(),
 	}
 }
 
@@ -41,7 +43,7 @@ func (u *Updater) Run(ctx context.Context, events chan<- SyncEvent) error {
 	}
 
 	now := time.Now().UTC()
-	s, err := loadStateForSync(u.cfg.DataDir, u.cfg.FullSync)
+	s, err := loadStateForSync(u.sourceDataDir, u.cfg.FullSync)
 	if err != nil {
 		return err
 	}

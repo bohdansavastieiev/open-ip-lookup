@@ -666,6 +666,7 @@ func newTestUpdaterWithURLs(
 		},
 		Enabled: ids,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	u.sourceDataDir = dataDir
 
 	rewrites := make(map[string]*neturl.URL, len(urls))
 	for id, rawURL := range urls {

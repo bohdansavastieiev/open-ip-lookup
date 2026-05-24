@@ -106,7 +106,7 @@ func (m *Manager) shutdownServer(srv *server.Server) error {
 }
 
 func (m *Manager) loadDataset(event update.SyncEvent) (*dataset.Dataset, error) {
-	ds, err := dataset.Load(m.cfg.Sources.DataDir, event.Available, m.logger)
+	ds, err := dataset.Load(m.cfg.Sources.SourceDataDir(), event.Available, m.logger)
 	if err != nil {
 		return nil, err
 	}

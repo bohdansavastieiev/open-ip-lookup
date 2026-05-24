@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,7 +24,12 @@ type FullSyncConfig struct {
 const (
 	minFullSyncIntervalHours = 1
 	maxFullSyncIntervalHours = 168
+	sourceDataDirName        = "sources"
 )
+
+func (c SourcesConfig) SourceDataDir() string {
+	return filepath.Join(c.DataDir, sourceDataDirName)
+}
 
 func (c SourcesConfig) validate() error {
 	var errs []error

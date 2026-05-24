@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -27,6 +28,12 @@ func TestFullSyncConfigInterval(t *testing.T) {
 	cfg := FullSyncConfig{IntervalHours: 12}
 
 	assert.Equal(t, 12*time.Hour, cfg.Interval())
+}
+
+func TestSourcesConfigSourceDataDir(t *testing.T) {
+	cfg := makeValidSourcesConfig()
+
+	assert.Equal(t, filepath.Join("./data", "sources"), cfg.SourceDataDir())
 }
 
 func TestSourcesConfigValidate_ReturnsNilForValidConfiguration(t *testing.T) {

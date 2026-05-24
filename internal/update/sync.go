@@ -47,7 +47,8 @@ func (u *Updater) updateSources(
 	var refreshed []source.ID
 	var failed []source.ID
 	var outdated []source.ID
-	tx := newStorageTxn(u.cfg.DataDir)
+	sourceDataDir := u.sourceDataDir
+	tx := newStorageTxn(sourceDataDir)
 
 	results, err := u.refreshSources(ctx, sourceIDs, s.Sources, retryDelays)
 	if err != nil {
@@ -96,7 +97,7 @@ func (u *Updater) updateSources(
 	u.updateSyncSchedule(scope, startedAt.UTC(), syncedAt.UTC(), retryNeededAfter, &s.SyncSchedule)
 	retryPending := !s.SyncSchedule.NextRetrySyncAt.IsZero()
 
-	if err := s.saveStateJSON(stateFilePath(u.cfg.DataDir)); err != nil {
+	if err := s.saveStateJSON(stateFilePath(sourceDataDir)); err != nil {
 		return SyncEvent{}, errors.Join(err, tx.rollback())
 	}
 	if err := tx.finalize(); err != nil {
