@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/dataset"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/ipinput"
 )
 
 const MaxIPs = 500
@@ -79,7 +80,7 @@ type Cloud struct {
 }
 
 func Get(raw string, ds *dataset.Dataset) *Report {
-	ips := parse(raw)
+	ips := ipinput.Parse(raw)
 	unique := dedup(ips)
 	counts := countOccurrences(ips)
 
@@ -232,28 +233,6 @@ func lastIPv6(addr netip.Addr, prefixBits int) netip.Addr {
 		b[bit/8] |= 1 << (7 - bit%8)
 	}
 	return netip.AddrFrom16(b)
-}
-
-func parse(raw string) []netip.Addr {
-	entries := strings.FieldsFunc(raw, func(c rune) bool {
-		return !isIPCandidateRune(c)
-	})
-
-	ips := make([]netip.Addr, 0, len(entries))
-	for _, e := range entries {
-		addr, err := netip.ParseAddr(e)
-		if err != nil {
-			continue
-		}
-		ips = append(ips, addr)
-	}
-
-	return ips
-}
-
-func isIPCandidateRune(c rune) bool {
-	return c == '.' || c == ':' || c >= '0' && c <= '9' ||
-		c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
 func dedup(ips []netip.Addr) []netip.Addr {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/dataset"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/ipinput"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,7 +29,7 @@ func TestHumanize(t *testing.T) {
 }
 
 func TestGet_CapsAtMaxIPs(t *testing.T) {
-	ips := parse(makeIPList(MaxIPs + 50))
+	ips := ipinput.Parse(makeIPList(MaxIPs + 50))
 	unique := dedup(ips)
 	assert.Equal(t, MaxIPs+50, len(ips))
 	assert.Equal(t, MaxIPs, min(len(unique), MaxIPs))
@@ -61,20 +62,6 @@ func TestDedup_PreservesOrder(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Equal(t, netip.MustParseAddr("5.6.7.8"), result[0])
 	assert.Equal(t, netip.MustParseAddr("1.2.3.4"), result[1])
-}
-
-func TestParse_SkipsInvalid(t *testing.T) {
-	ips := parse("hello 1.2.3.4 world 5.6.7.8 !")
-	assert.Len(t, ips, 2)
-}
-
-func TestParse_ExtractsIPsFromPunctuation(t *testing.T) {
-	ips := parse("[1.2.3.4], ] [2001:db8::1] 999.999.999.999")
-
-	assert.Equal(t, []netip.Addr{
-		netip.MustParseAddr("1.2.3.4"),
-		netip.MustParseAddr("2001:db8::1"),
-	}, ips)
 }
 
 func TestGet_ReportsCanonicalIPs(t *testing.T) {
