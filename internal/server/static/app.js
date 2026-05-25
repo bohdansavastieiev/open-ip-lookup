@@ -70,6 +70,9 @@ resultsNode.addEventListener("click", handleResultsClick);
 document.addEventListener("click", handleDocumentClick);
 
 const initialShareBearer = sharedBearerFromHash();
+if (!initialShareBearer) {
+	clearLookupInput();
+}
 renderInitialState(initialShareBearer ? "Loading shared lookup..." : "Loading your IP information...");
 if (initialShareBearer) {
 	loadSharedLookup(initialShareBearer);
@@ -155,6 +158,7 @@ async function handleShareClick() {
 
 async function loadSharedLookup(bearer) {
 	state.mode = "share";
+	clearLookupInput();
 	setBusy(true);
 	hideStatus();
 	try {
@@ -289,6 +293,10 @@ function isResultRowToggleTarget(target, row) {
 
 function encodedFormBody(formNode) {
 	return new URLSearchParams(new FormData(formNode)).toString();
+}
+
+function clearLookupInput() {
+	inputNode.value = "";
 }
 
 function encodedShareBody(input) {

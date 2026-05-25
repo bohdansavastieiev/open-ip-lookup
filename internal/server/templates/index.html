@@ -39,6 +39,7 @@
     <form
       action="/api/lookup"
       method="post"
+      autocomplete="off"
       data-lookup-form
       data-max-body-bytes="{{.MaxLookupBodyBytes}}"
       class="lookup-card"
@@ -48,6 +49,7 @@
         id="lookup-input"
         name="input"
         rows="3"
+        autocomplete="off"
         data-lookup-input
         class="lookup-input"
         placeholder="Paste IP addresses or any text containing them."
