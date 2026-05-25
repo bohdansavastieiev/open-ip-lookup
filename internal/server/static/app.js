@@ -68,6 +68,7 @@ controlsNode.addEventListener("change", handleControlsChange);
 controlsNode.addEventListener("click", handleControlsClick);
 resultsNode.addEventListener("click", handleResultsClick);
 document.addEventListener("click", handleDocumentClick);
+window.addEventListener("hashchange", handleHashChange);
 
 const initialShareBearer = sharedBearerFromHash();
 if (!initialShareBearer) {
@@ -200,6 +201,15 @@ async function loadClientIPReport() {
 		}
 		renderClientIPError(err.message);
 	}
+}
+
+function handleHashChange() {
+	const bearer = sharedBearerFromHash();
+	if (!bearer) {
+		return;
+	}
+	renderInitialState("Loading shared lookup...");
+	loadSharedLookup(bearer);
 }
 
 function handleControlsChange(event) {
