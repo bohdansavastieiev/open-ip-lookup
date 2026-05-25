@@ -52,9 +52,14 @@ const state = {
 	expandedRows: new Set(),
 	openFilterKey: null,
 	isBusy: false,
+	isSharing: false,
 	lastLookupInput: null,
 	lastLookupBody: null,
 	lastLookupReport: null,
+	shareLookupBody: null,
+	sharePath: null,
+	sharedLookupInput: null,
+	shareButtonReset: null,
 };
 
 form.addEventListener("submit", handleLookupSubmit);
@@ -64,8 +69,13 @@ controlsNode.addEventListener("click", handleControlsClick);
 resultsNode.addEventListener("click", handleResultsClick);
 document.addEventListener("click", handleDocumentClick);
 
-renderInitialState();
-loadClientIPReport();
+const initialShareBearer = sharedBearerFromHash();
+renderInitialState(initialShareBearer ? "Loading shared lookup..." : "Loading your IP information...");
+if (initialShareBearer) {
+	loadSharedLookup(initialShareBearer);
+} else {
+	loadClientIPReport();
+}
 updateFormState();
 
 async function handleLookupSubmit(event) {
@@ -91,6 +101,7 @@ async function handleLookupSubmit(event) {
 	}
 
 	state.mode = "lookup";
+	const shouldClearHash = shouldClearSharedHash(input);
 	setBusy(true);
 	hideStatus();
 	try {
@@ -98,10 +109,73 @@ async function handleLookupSubmit(event) {
 		rememberLookup(input, body, report);
 		loadReport(report);
 		renderApp();
+		if (shouldClearHash) {
+			clearSharedHash();
+		}
 		hideStatus();
 		scrollToLookupOutput();
 	} catch (err) {
 		showError(err.message);
+	} finally {
+		setBusy(false);
+	}
+}
+
+async function handleShareClick() {
+	if (!canShareLookup()) {
+		return;
+	}
+
+	let copied = false;
+	const shouldCreate = state.shareLookupBody !== state.lastLookupBody;
+	const shareBody = shouldCreate ? encodedShareBody(state.lastLookupInput) : "";
+	if (shouldCreate && byteLength(shareBody) > maxLookupBodyBytes()) {
+		showError(`Input is too large. Limit: ${formatBytes(maxLookupBodyBytes())}.`);
+		return;
+	}
+
+	setSharing(true);
+	hideStatus();
+	try {
+		if (shouldCreate) {
+			const created = await createShare(shareBody);
+			rememberShare(state.lastLookupBody, created.path);
+		}
+		await copySharePath(state.sharePath);
+		copied = true;
+	} catch (err) {
+		showError(err.message);
+	} finally {
+		setSharing(false);
+		if (copied) {
+			showShareCopied();
+		}
+	}
+}
+
+async function loadSharedLookup(bearer) {
+	state.mode = "share";
+	setBusy(true);
+	hideStatus();
+	try {
+		const shared = await resolveShare(bearer);
+		inputNode.value = shared.input;
+		const body = encodedFormBody(form);
+		if (byteLength(body) > maxLookupBodyBytes()) {
+			throw new Error(`Shared lookup is too large. Limit: ${formatBytes(maxLookupBodyBytes())}.`);
+		}
+
+		const report = await lookup(body);
+		rememberLookup(shared.input, body, report);
+		rememberShare(body, sharePathForBearer(bearer));
+		state.sharedLookupInput = shared.input;
+		loadReport(report);
+		renderApp();
+		hideStatus();
+	} catch (err) {
+		clearSharedHash();
+		showError(`Shared lookup unavailable. ${err.message}`);
+		renderSharedLookupError(err.message);
 	} finally {
 		setBusy(false);
 	}
@@ -186,6 +260,12 @@ function handleDocumentClick(event) {
 }
 
 function handleResultsClick(event) {
+	const shareButton = event.target.closest("[data-share-button]");
+	if (shareButton) {
+		void handleShareClick();
+		return;
+	}
+
 	const sortButton = event.target.closest("[data-sort-key]");
 	if (sortButton) {
 		cycleSort(sortButton.dataset.sortKey);
@@ -211,6 +291,10 @@ function encodedFormBody(formNode) {
 	return new URLSearchParams(new FormData(formNode)).toString();
 }
 
+function encodedShareBody(input) {
+	return JSON.stringify({ input });
+}
+
 function matchesLastLookup(input, body) {
 	return input === state.lastLookupInput && body === state.lastLookupBody;
 }
@@ -219,6 +303,11 @@ function rememberLookup(input, body, report) {
 	state.lastLookupInput = input;
 	state.lastLookupBody = body;
 	state.lastLookupReport = report;
+}
+
+function rememberShare(body, path) {
+	state.shareLookupBody = body;
+	state.sharePath = path;
 }
 
 function byteLength(value) {
@@ -243,6 +332,34 @@ async function lookup(body) {
 	return response.json();
 }
 
+async function createShare(body) {
+	const response = await fetch("/api/shares", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", Accept: "application/json" },
+		body,
+	});
+
+	if (!response.ok) {
+		throw new Error(await responseErrorMessage(response));
+	}
+
+	return response.json();
+}
+
+async function resolveShare(bearer) {
+	const response = await fetch("/api/shares/resolve", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", Accept: "application/json" },
+		body: JSON.stringify({ bearer }),
+	});
+
+	if (!response.ok) {
+		throw new Error(await responseErrorMessage(response));
+	}
+
+	return response.json();
+}
+
 async function clientIPLookup() {
 	const response = await fetch("/api/client-ip", {
 		headers: { Accept: "application/json" },
@@ -256,7 +373,7 @@ async function clientIPLookup() {
 }
 
 async function responseErrorMessage(response) {
-	const fallback = `Lookup failed with status ${response.status}.`;
+	const fallback = `Request failed with status ${response.status}.`;
 	if (!response.headers.get("Content-Type")?.includes("application/json")) {
 		return fallback;
 	}
@@ -375,11 +492,21 @@ function parseIPv4Hextets(ip) {
 	];
 }
 
-function renderInitialState() {
+function renderInitialState(title = "Loading your IP information...") {
 	hideStatus();
 	controlsNode.hidden = true;
 	resultsNode.className = "results-min-height";
-	resultsNode.replaceChildren(emptyState("Loading your IP information...", "", "quiet"));
+	resultsNode.replaceChildren(emptyState(title, "", "quiet"));
+}
+
+function renderSharedLookupError(message) {
+	controlsNode.replaceChildren();
+	controlsNode.hidden = true;
+	resultsNode.className = "results-min-height";
+	resultsNode.replaceChildren(emptyState(
+		"Shared lookup unavailable",
+		`${message} Paste IPs to start a new lookup.`,
+	));
 }
 
 function renderClientIPReport() {
@@ -883,15 +1010,17 @@ function renderResults(rows, visibleCount) {
 function renderResultsHeader(visibleCount) {
 	const header = document.createElement("div");
 	header.className = "results-header";
-
-	const title = document.createElement("h2");
-	title.className = "results-title";
-	title.textContent = "Lookup results";
-
-	const stats = renderResultsStats(visibleCount);
-
-	header.append(title, stats);
+	header.append(renderResultsStats(visibleCount), renderShareButton());
 	return header;
+}
+
+function renderShareButton() {
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "button-ghost results-share-button";
+	button.dataset.shareButton = "true";
+	updateShareButton(button);
+	return button;
 }
 
 function renderResultsStats(visibleCount) {
@@ -1769,10 +1898,57 @@ function setBusy(isBusy) {
 	updateFormState();
 }
 
+function setSharing(isSharing) {
+	state.isSharing = isSharing;
+	clearShareButtonReset();
+	updateFormState();
+}
+
+function showShareCopied() {
+	state.shareButtonReset = window.setTimeout(() => {
+		state.shareButtonReset = null;
+		if (!state.isSharing) {
+			updateShareButton();
+		}
+	}, 1800);
+	updateShareButton();
+}
+
+function clearShareButtonReset() {
+	if (state.shareButtonReset) {
+		window.clearTimeout(state.shareButtonReset);
+		state.shareButtonReset = null;
+	}
+}
+
 function updateFormState() {
 	updateInputSize();
 	resizeLookupInput();
 	submitButton.disabled = !canSubmitLookup();
+	updateShareButton();
+}
+
+function updateShareButton(button = shareButtonNode()) {
+	if (!button) {
+		return;
+	}
+	const canShare = canShareLookup();
+	button.disabled = !canShare;
+	button.textContent = shareButtonText(canShare);
+}
+
+function shareButtonNode() {
+	return resultsNode.querySelector("[data-share-button]");
+}
+
+function shareButtonText(canShare) {
+	if (state.isSharing) {
+		return "Sharing...";
+	}
+	if (state.shareButtonReset && canShare) {
+		return "Copied";
+	}
+	return "Share lookup";
 }
 
 function canSubmitLookup() {
@@ -1780,6 +1956,61 @@ function canSubmitLookup() {
 		return false;
 	}
 	return !matchesLastLookup(inputNode.value, encodedFormBody(form));
+}
+
+function canShareLookup() {
+	if (state.isBusy || state.isSharing || !state.lastLookupReport?.stats.reported) {
+		return false;
+	}
+	return matchesLastLookup(inputNode.value, encodedFormBody(form));
+}
+
+function sharedBearerFromHash() {
+	if (!window.location.hash.startsWith("#")) {
+		return "";
+	}
+	return new URLSearchParams(window.location.hash.slice(1)).get("s") || "";
+}
+
+function sharePathForBearer(bearer) {
+	return `/#s=${encodeURIComponent(bearer)}`;
+}
+
+function shouldClearSharedHash(input) {
+	return state.sharedLookupInput !== null && input !== state.sharedLookupInput;
+}
+
+function clearSharedHash() {
+	window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+	state.sharedLookupInput = null;
+}
+
+async function copySharePath(path) {
+	const url = new URL(path, window.location.origin).href;
+	await copyText(url);
+}
+
+async function copyText(text) {
+	if (navigator.clipboard?.writeText) {
+		await navigator.clipboard.writeText(text);
+		return;
+	}
+	copyTextWithTextArea(text);
+}
+
+function copyTextWithTextArea(text) {
+	const node = document.createElement("textarea");
+	node.value = text;
+	node.setAttribute("readonly", "");
+	node.style.position = "fixed";
+	node.style.opacity = "0";
+	document.body.appendChild(node);
+	node.select();
+	const copied = document.execCommand("copy");
+	node.remove();
+	if (!copied) {
+		throw new Error("Share link created, but copying failed.");
+	}
 }
 
 function resizeLookupInput() {

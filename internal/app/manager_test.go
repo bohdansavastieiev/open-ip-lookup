@@ -1,11 +1,18 @@
 package app
 
 import (
+	"context"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/config"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/update"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestShouldLoadDataset(t *testing.T) {
@@ -71,6 +78,32 @@ func TestShouldKeepServingAfterLoadError(t *testing.T) {
 	assert.True(t, shouldKeepServingAfterLoadError(true))
 }
 
+func TestOpenShares_CreatesDBUnderDataDir(t *testing.T) {
+	dataDir := t.TempDir()
+	m := New(config.Config{Sources: config.SourcesConfig{DataDir: dataDir}}, discardLogger())
+
+	require.NoError(t, m.openShares())
+	t.Cleanup(func() { assert.NoError(t, m.Close()) })
+
+	_, err := os.Stat(filepath.Join(dataDir, "shares", "shares.sqlite"))
+	require.NoError(t, err)
+}
+
+func TestManagerShareMethodsUseStore(t *testing.T) {
+	dataDir := t.TempDir()
+	m := New(config.Config{Sources: config.SourcesConfig{DataDir: dataDir}}, discardLogger())
+	require.NoError(t, m.openShares())
+	t.Cleanup(func() { assert.NoError(t, m.Close()) })
+
+	created, err := m.CreateShare(context.Background(), "1.1.1.1 1.1.1.1")
+	require.NoError(t, err)
+
+	resolved, err := m.ResolveShare(context.Background(), created.Bearer)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, resolved.ID)
+	assert.Equal(t, "1.1.1.1\n1.1.1.1", resolved.Input)
+}
+
 func TestHasMaxMindSources(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -110,4 +143,8 @@ func TestHasMaxMindSources(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/dataset"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/report"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/server"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/share"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/update"
 )
@@ -25,6 +26,10 @@ type Manager struct {
 	mu         sync.RWMutex
 	dataset    *dataset.Dataset
 	hasMaxMind bool
+	shares     *share.Store
+
+	shareCleanupCancel context.CancelFunc
+	shareCleanupDone   <-chan struct{}
 }
 
 func New(cfg config.Config, logger *slog.Logger) *Manager {
@@ -32,6 +37,12 @@ func New(cfg config.Config, logger *slog.Logger) *Manager {
 }
 
 func (m *Manager) Run(ctx context.Context) error {
+	if err := m.openShares(); err != nil {
+		return err
+	}
+	m.logger.Info("share store opened")
+	m.startShareCleanup(ctx)
+
 	updater := update.New(m.cfg.Sources, m.logger)
 	events := make(chan update.SyncEvent, 1)
 	errCh := make(chan error, 2)
@@ -81,6 +92,49 @@ func (m *Manager) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return errors.Join(m.shutdownServer(srv), m.Close())
 		}
+	}
+}
+
+func (m *Manager) openShares() error {
+	shares, err := share.Open(share.DefaultDBPath(m.cfg.Sources.DataDir))
+	if err != nil {
+		return err
+	}
+	m.shares = shares
+	return nil
+}
+
+func (m *Manager) startShareCleanup(ctx context.Context) {
+	cleanupCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	m.shareCleanupCancel = cancel
+	m.shareCleanupDone = done
+
+	go func() {
+		defer close(done)
+		m.cleanupShares(cleanupCtx)
+
+		ticker := time.NewTicker(share.DefaultCleanupInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				m.cleanupShares(cleanupCtx)
+			case <-cleanupCtx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (m *Manager) cleanupShares(ctx context.Context) {
+	deleted, err := m.shares.DeleteExpired(ctx)
+	if err != nil {
+		m.logger.Error("delete expired shares", slog.Any("err", err))
+		return
+	}
+	if deleted > 0 {
+		m.logger.Info("deleted expired shares", slog.Int64("count", deleted))
 	}
 }
 
@@ -158,14 +212,34 @@ func (m *Manager) LookupIP(ip netip.Addr) report.IPInfo {
 	return report.InfoForIP(ip, m.dataset)
 }
 
+func (m *Manager) CreateShare(ctx context.Context, raw string) (share.Created, error) {
+	return m.shares.Create(ctx, raw)
+}
+
+func (m *Manager) ResolveShare(ctx context.Context, bearer string) (share.Resolved, error) {
+	return m.shares.Resolve(ctx, bearer)
+}
+
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	err := m.dataset.Close()
+	m.stopShareCleanup()
+	err := errors.Join(m.dataset.Close(), m.shares.Close())
 	m.dataset = nil
+	m.shares = nil
 
 	return err
+}
+
+func (m *Manager) stopShareCleanup() {
+	if m.shareCleanupCancel == nil {
+		return
+	}
+	m.shareCleanupCancel()
+	<-m.shareCleanupDone
+	m.shareCleanupCancel = nil
+	m.shareCleanupDone = nil
 }
 
 func hasMaxMindSources(available []source.ID) bool {

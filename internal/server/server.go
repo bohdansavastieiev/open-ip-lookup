@@ -4,21 +4,26 @@ package server
 import (
 	"context"
 	"embed"
-	"encoding/json"
-	"errors"
 	"html/template"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/netip"
 	"time"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/config"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/report"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/share"
 )
 
-const maxLookupBodyBytes = 1024 * 1024
+const (
+	maxLookupBodyBytes       = 1024 * 1024
+	maxShareResolveBodyBytes = 4 * 1024
+	shareCreateRateLimitMax  = 20
+	shareCreateRateWindow    = 10 * time.Minute
+	shareResolveRateLimitMax = 120
+	shareResolveRateWindow   = 10 * time.Minute
+)
 
 const contentSecurityPolicy = "default-src 'self'; " +
 	"script-src 'self'; " +
@@ -45,17 +50,17 @@ type Server struct {
 	service    service
 	logger     *slog.Logger
 	httpServer *http.Server
+
+	shareCreateLimiter  *rateLimiter
+	shareResolveLimiter *rateLimiter
 }
 
 type service interface {
 	HasMaxMind() bool
 	Report(string) *report.Report
 	LookupIP(netip.Addr) report.IPInfo
-}
-
-type templateData struct {
-	HasMaxMind         bool
-	MaxLookupBodyBytes int
+	CreateShare(context.Context, string) (share.Created, error)
+	ResolveShare(context.Context, string) (share.Resolved, error)
 }
 
 type noDirectoryListingFS struct {
@@ -70,9 +75,11 @@ func New(cfg config.ServerConfig, service service, logger *slog.Logger) (*Server
 
 	mux := http.NewServeMux()
 	s := &Server{
-		templates: tmps,
-		service:   service,
-		logger:    logger,
+		templates:           tmps,
+		service:             service,
+		logger:              logger,
+		shareCreateLimiter:  newRateLimiter(shareCreateRateLimitMax, shareCreateRateWindow),
+		shareResolveLimiter: newRateLimiter(shareResolveRateLimitMax, shareResolveRateWindow),
 	}
 	if err := s.setupRoutes(mux); err != nil {
 		return nil, err
@@ -104,6 +111,11 @@ func (s *Server) setupRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /healthz", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleHealth)))
 	mux.Handle("POST /api/lookup", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleLookup)))
 	mux.Handle("GET /api/client-ip", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleClientIPLookup)))
+	mux.Handle("POST /api/shares", cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleShare)))
+	mux.Handle(
+		"POST /api/shares/resolve",
+		cacheControl(noStoreCacheControl, http.HandlerFunc(s.handleShareResolve)),
+	)
 	mux.Handle("GET /static/flags/", cacheControl(staticFlagCacheControl, staticHandler))
 	mux.Handle("GET /static/", cacheControl(staticCacheControl, staticHandler))
 
@@ -135,101 +147,4 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
-}
-
-func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	data := templateData{
-		HasMaxMind:         s.service.HasMaxMind(),
-		MaxLookupBodyBytes: maxLookupBodyBytes,
-	}
-	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
-		s.logger.Error("render home", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte("ok\n"))
-}
-
-func (s *Server) handleLookup(w http.ResponseWriter, r *http.Request) {
-	startedAt := time.Now()
-	r.Body = http.MaxBytesReader(w, r.Body, maxLookupBodyBytes)
-
-	if err := r.ParseForm(); err != nil {
-		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
-			return
-		}
-
-		writeJSONError(w, http.StatusBadRequest, "invalid lookup request")
-		return
-	}
-
-	rpt := s.service.Report(r.Form.Get("input"))
-	s.logger.Info(
-		"lookup completed",
-		slog.String("client_ip", clientIPText(r)),
-		slog.Duration("duration", time.Since(startedAt)),
-		slog.Int("total", rpt.Stats.Total),
-		slog.Int("unique", rpt.Stats.Unique),
-		slog.Int("reported", rpt.Stats.Reported),
-	)
-
-	writeJSON(w, http.StatusOK, rpt)
-}
-
-func (s *Server) handleClientIPLookup(w http.ResponseWriter, r *http.Request) {
-	ip, err := clientIP(r)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid client IP")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, s.service.LookupIP(ip))
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
-func securityHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		next.ServeHTTP(w, r)
-	})
-}
-
-func cacheControl(value string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", value)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func clientIP(r *http.Request) (netip.Addr, error) {
-	return netip.ParseAddr(clientIPText(r))
-}
-
-func clientIPText(r *http.Request) string {
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
-	}
-
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
