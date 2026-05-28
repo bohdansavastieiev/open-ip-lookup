@@ -90,7 +90,7 @@
   }
 
   .lookup-input {
-    @apply min-h-24 max-h-56 w-full resize-none overflow-y-hidden rounded-2xl;
+    @apply h-56 w-full resize-none overflow-y-auto rounded-2xl;
     @apply border border-slate-700 bg-slate-950;
     @apply px-4 py-3 font-mono text-sm leading-6 text-slate-100 outline-none transition;
     @apply placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20;

@@ -1941,7 +1941,6 @@ function clearShareButtonReset() {
 
 function updateFormState() {
 	updateInputSize();
-	resizeLookupInput();
 	submitButton.disabled = !canSubmitLookup();
 	updateShareButton();
 }
@@ -2029,14 +2028,6 @@ function copyTextWithTextArea(text) {
 	if (!copied) {
 		throw new Error("Share link created, but copying failed.");
 	}
-}
-
-function resizeLookupInput() {
-	inputNode.style.height = "auto";
-	const maxHeight = Number.parseFloat(getComputedStyle(inputNode).maxHeight);
-	const nextHeight = Math.min(inputNode.scrollHeight, maxHeight);
-	inputNode.style.height = `${nextHeight}px`;
-	inputNode.style.overflowY = inputNode.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function updateInputSize() {
