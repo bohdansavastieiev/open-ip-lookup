@@ -6,8 +6,13 @@
 *.dylib
 /tailwindcss
 /openiplookup
+/openiplookup-log-summary
 /server
 /cmd/server/server
+
+# Local ops tools
+/cmd/openiplookup-log-summary/
+/internal/logsummary/
 
 # Build output
 /bin/

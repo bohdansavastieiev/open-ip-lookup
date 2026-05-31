@@ -130,10 +130,10 @@ func TestLookup_ASNFromPrefix(t *testing.T) {
 	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{asn: 13335})
 
 	ds.asns[13335] = asnEntry{
-		handle:      "test-handle",
-		description: "test-desc",
-		country:     "test-cc",
-		isDC:        true,
+		handle:       "test-handle",
+		description:  "test-desc",
+		country:      "test-cc",
+		isDatacenter: true,
 	}
 
 	ip := netip.MustParseAddr("1.0.0.1")
@@ -145,20 +145,62 @@ func TestLookup_ASNFromPrefix(t *testing.T) {
 	assert.Contains(t, result.Flags, IPFlagDatacenter)
 }
 
-func TestLookup_LowReputationFromASN(t *testing.T) {
+func TestLookup_HighRiskASNFromASN(t *testing.T) {
 	ds := newTestDataset()
 	pfx := netip.MustParsePrefix("1.0.0.0/24")
 	ds.prefixes.Insert(pfx, 0)
 	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{asn: 14618})
 
 	ds.asns[14618] = asnEntry{
-		isBad: true,
+		isHighRisk: true,
 	}
 
 	ip := netip.MustParseAddr("1.0.0.1")
 	result := ds.Lookup(ip)
 
-	assert.Contains(t, result.Flags, IPFlagLowReputation)
+	assert.Contains(t, result.Flags, IPFlagHighRiskASN)
+}
+
+func TestLookup_PossibleDatacenterFromASN(t *testing.T) {
+	ds := newTestDataset()
+	pfx := netip.MustParsePrefix("1.0.0.0/24")
+	ds.prefixes.Insert(pfx, 0)
+	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{asn: 99999})
+	ds.asns[99999] = asnEntry{isPossibleDatacenter: true}
+
+	result := ds.Lookup(netip.MustParseAddr("1.0.0.1"))
+
+	assert.Contains(t, result.Flags, IPFlagPossibleDatacenter)
+	assert.NotContains(t, result.Flags, IPFlagDatacenter)
+}
+
+func TestLookup_PossibleDatacenterSkippedWhenDatacenterFromPrefix(t *testing.T) {
+	ds := newTestDataset()
+	pfx := netip.MustParsePrefix("1.0.0.0/24")
+	ds.prefixes.Insert(pfx, 0)
+	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{
+		flags: IPFlagDatacenter,
+		asn:   99999,
+	})
+	ds.asns[99999] = asnEntry{isPossibleDatacenter: true}
+
+	result := ds.Lookup(netip.MustParseAddr("1.0.0.1"))
+
+	assert.Contains(t, result.Flags, IPFlagDatacenter)
+	assert.NotContains(t, result.Flags, IPFlagPossibleDatacenter)
+}
+
+func TestLookup_PossibleDatacenterSkippedWhenDatacenterFromASN(t *testing.T) {
+	ds := newTestDataset()
+	pfx := netip.MustParsePrefix("1.0.0.0/24")
+	ds.prefixes.Insert(pfx, 0)
+	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{asn: 99999})
+	ds.asns[99999] = asnEntry{isDatacenter: true, isPossibleDatacenter: true}
+
+	result := ds.Lookup(netip.MustParseAddr("1.0.0.1"))
+
+	assert.Contains(t, result.Flags, IPFlagDatacenter)
+	assert.NotContains(t, result.Flags, IPFlagPossibleDatacenter)
 }
 
 func TestLookup_TorExitNotRelay(t *testing.T) {
@@ -229,7 +271,7 @@ func TestLookup_DatacenterFromPrefixAndASN(t *testing.T) {
 	ds.prefixes.Insert(pfx, 0)
 	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{flags: IPFlagDatacenter, asn: 99999})
 
-	ds.asns[99999] = asnEntry{isDC: true}
+	ds.asns[99999] = asnEntry{isDatacenter: true}
 
 	ip := netip.MustParseAddr("192.0.2.1")
 	result := ds.Lookup(ip)
@@ -298,7 +340,7 @@ func TestLookup_UnallocatedEarlyExitSkipsCloudAndASN(t *testing.T) {
 			cloudProviderIndex: 1, asn: 99999,
 		})
 	ds.cloudProviders = append(ds.cloudProviders, cloudProviderInfo{provider: "test-cloud"})
-	ds.asns[99999] = asnEntry{isDC: true}
+	ds.asns[99999] = asnEntry{isDatacenter: true}
 
 	ip := netip.MustParseAddr("10.0.0.1")
 	result := ds.Lookup(ip)
@@ -360,7 +402,7 @@ func TestLookup_FullIntegration(t *testing.T) {
 	ds.cloudProviders = append(
 		ds.cloudProviders,
 		cloudProviderInfo{provider: "AWS", region: "us-east-1"})
-	ds.asns[99999] = asnEntry{handle: "test-handle", isDC: true}
+	ds.asns[99999] = asnEntry{handle: "test-handle", isDatacenter: true}
 
 	ip := netip.MustParseAddr("8.8.8.8")
 	result := ds.Lookup(ip)

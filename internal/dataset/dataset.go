@@ -46,14 +46,15 @@ type ipEntry struct {
 }
 
 type asnEntry struct {
-	isDC        bool
-	isBad       bool
-	handle      string
-	description string
-	country     string
-	countryCode string
-	category    string
-	networkRole string
+	isDatacenter         bool
+	isPossibleDatacenter bool
+	isHighRisk           bool
+	handle               string
+	description          string
+	country              string
+	countryCode          string
+	category             string
+	networkRole          string
 }
 
 type cloudProviderInfo struct {

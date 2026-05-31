@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildASNMap_SetsIsBad(t *testing.T) {
+func TestBuildASNMap_SetsHighRiskASN(t *testing.T) {
 	b := newTestBuilder()
 	snap := snapshot{
 		source.BountyyfiBadASNListAll: map[ASN][]string{13335: {"test-inc-1"}, 14618: {"test-inc-2"}},
@@ -18,9 +18,9 @@ func TestBuildASNMap_SetsIsBad(t *testing.T) {
 	b.snap = snap
 	b.buildASNMap()
 
-	assert.True(t, b.ds.asns[13335].isBad)
-	assert.True(t, b.ds.asns[14618].isBad)
-	assert.False(t, b.ds.asns[15169].isBad)
+	assert.True(t, b.ds.asns[13335].isHighRisk)
+	assert.True(t, b.ds.asns[14618].isHighRisk)
+	assert.False(t, b.ds.asns[15169].isHighRisk)
 }
 
 func TestBuildASNMap_SetsIsDC(t *testing.T) {
@@ -31,8 +31,8 @@ func TestBuildASNMap_SetsIsDC(t *testing.T) {
 	b.snap = snap
 	b.buildASNMap()
 
-	assert.True(t, b.ds.asns[13335].isDC)
-	assert.True(t, b.ds.asns[14618].isDC)
+	assert.True(t, b.ds.asns[13335].isDatacenter)
+	assert.True(t, b.ds.asns[14618].isDatacenter)
 }
 
 func TestBuildASNMap_MergesMultipleSources(t *testing.T) {
@@ -44,10 +44,10 @@ func TestBuildASNMap_MergesMultipleSources(t *testing.T) {
 	b.snap = snap
 	b.buildASNMap()
 
-	assert.True(t, b.ds.asns[13335].isBad)
-	assert.True(t, b.ds.asns[13335].isDC)
-	assert.True(t, b.ds.asns[14618].isDC)
-	assert.False(t, b.ds.asns[14618].isBad)
+	assert.True(t, b.ds.asns[13335].isHighRisk)
+	assert.True(t, b.ds.asns[13335].isDatacenter)
+	assert.True(t, b.ds.asns[14618].isDatacenter)
+	assert.False(t, b.ds.asns[14618].isHighRisk)
 }
 
 func TestBuildBogonTable_AddsBogon(t *testing.T) {
@@ -241,7 +241,7 @@ func TestBuildPrefixTable_CloudProviderFromTobilg(t *testing.T) {
 	assert.Equal(t, "us-east-1", cp.region)
 }
 
-func TestBuildPrefixTable_CloudProviderFromRezmoss(t *testing.T) {
+func TestBuildPrefixTable_RezmossCloudProviderSetsDatacenterFlag(t *testing.T) {
 	b := newTestBuilder()
 	pfx := netip.MustParsePrefix("1.178.1.0/24")
 	snap := snapshot{
@@ -254,7 +254,10 @@ func TestBuildPrefixTable_CloudProviderFromRezmoss(t *testing.T) {
 
 	entryIndex, ok := b.ds.prefixes.Get(pfx)
 	require.True(t, ok)
-	cp := b.ds.cloudProviders[b.ds.prefixEntries[entryIndex].cloudProviderIndex-1]
+	entry := b.ds.prefixEntries[entryIndex]
+	assert.Equal(t, IPFlagDatacenter, entry.flags)
+	require.NotZero(t, entry.cloudProviderIndex)
+	cp := b.ds.cloudProviders[entry.cloudProviderIndex-1]
 	assert.Equal(t, "AWS", cp.provider)
 	assert.Equal(t, "cloudfront", cp.service)
 	assert.Equal(t, "GLOBAL", cp.region)
@@ -291,6 +294,52 @@ func TestBuildASNMap_SetsIPverseMetadata(t *testing.T) {
 	assert.Equal(t, "test-cc", e.countryCode)
 	assert.Equal(t, "test-category", e.category)
 	assert.Equal(t, "test-role", e.networkRole)
+}
+
+func TestBuildASNMap_SetsPossibleDatacenterFromIPverseMetadata(t *testing.T) {
+	b := newTestBuilder()
+	snap := snapshot{
+		source.IPVerseASMetadataAll: map[ASN]ipverseASMetadataRecord{
+			99999: {
+				ASN: 99999,
+				Metadata: ipverseASMetadata{
+					Handle:      "EXAMPLE-CLOUD",
+					Description: "Example Network LLC",
+				},
+			},
+			100000: {
+				ASN: 100000,
+				Metadata: ipverseASMetadata{
+					Handle:      "EXAMPLE-NET",
+					Description: "Example Hosting LLC",
+				},
+			},
+		},
+	}
+	b.snap = snap
+	b.buildASNMap()
+
+	assert.True(t, b.ds.asns[99999].isPossibleDatacenter)
+	assert.True(t, b.ds.asns[100000].isPossibleDatacenter)
+}
+
+func TestBuildASNMap_PossibleDatacenterNegativeKeywordsSuppress(t *testing.T) {
+	b := newTestBuilder()
+	snap := snapshot{
+		source.IPVerseASMetadataAll: map[ASN]ipverseASMetadataRecord{
+			99999: {
+				ASN: 99999,
+				Metadata: ipverseASMetadata{
+					Handle:      "EXAMPLE-CLOUD",
+					Description: "Example Telecom LLC",
+				},
+			},
+		},
+	}
+	b.snap = snap
+	b.buildASNMap()
+
+	assert.False(t, b.ds.asns[99999].isPossibleDatacenter)
 }
 
 func TestBuildBogonTable_SpecialOverridesBogon(t *testing.T) {

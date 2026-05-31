@@ -64,6 +64,7 @@ func (b *builder) buildASNMap() {
 			e.countryCode = derefStr(record.Metadata.CountryCode)
 			e.category = derefStr(record.Metadata.Category)
 			e.networkRole = derefStr(record.Metadata.NetworkRole)
+			e.isPossibleDatacenter = hasPossibleDatacenterKeywords(e.handle, e.description)
 			b.ds.asns[asn] = e
 		}
 	}
@@ -71,7 +72,7 @@ func (b *builder) buildASNMap() {
 	if entry, ok := b.snap[source.UmkusIPIndexASNDCs]; ok {
 		for _, asn := range entry.([]ASN) {
 			e := b.ds.asns[asn]
-			e.isDC = true
+			e.isDatacenter = true
 			b.ds.asns[asn] = e
 		}
 	}
@@ -79,7 +80,7 @@ func (b *builder) buildASNMap() {
 	if entry, ok := b.snap[source.BountyyfiBadASNListAll]; ok {
 		for asn := range entry.(map[ASN][]string) {
 			e := b.ds.asns[asn]
-			e.isBad = true
+			e.isHighRisk = true
 			b.ds.asns[asn] = e
 		}
 	}

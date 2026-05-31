@@ -5,11 +5,12 @@ type IPFlag int
 const (
 	IPFlagVPN IPFlag = 1 << iota
 	IPFlagDatacenter
+	IPFlagPossibleDatacenter
 	IPFlagTorExit
 	IPFlagTorRelay
 	IPFlagProxyHighConf
 	IPFlagProxyLowConf
-	IPFlagLowReputation
+	IPFlagHighRiskASN
 )
 
 var ipFlagDefs = []struct {
@@ -18,11 +19,12 @@ var ipFlagDefs = []struct {
 }{
 	{IPFlagVPN, "VPN"},
 	{IPFlagDatacenter, "Datacenter"},
+	{IPFlagPossibleDatacenter, "Possible Datacenter"},
 	{IPFlagTorExit, "Tor Exit"},
 	{IPFlagTorRelay, "Tor Relay"},
 	{IPFlagProxyHighConf, "Proxy"},
 	{IPFlagProxyLowConf, "Possible Proxy"},
-	{IPFlagLowReputation, "Low Reputation"},
+	{IPFlagHighRiskASN, "High-Risk ASN"},
 }
 
 func (f IPFlag) Label() string {

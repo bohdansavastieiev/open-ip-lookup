@@ -66,13 +66,18 @@ func createTestCityReader(t *testing.T) *geoip2.Reader {
 
 func createTestASNReader(t *testing.T) *geoip2.Reader {
 	t.Helper()
+	return createTestASNReaderWithOrg(t, "test-asn-org")
+}
+
+func createTestASNReaderWithOrg(t *testing.T, org string) *geoip2.Reader {
+	t.Helper()
 	writer, err := mmdbwriter.New(mmdbwriter.Options{DatabaseType: "GeoLite2-ASN"})
 	require.NoError(t, err)
 
 	pfx := netip.MustParsePrefix("8.0.0.0/8")
 	record := mmdbtype.Map{
 		"autonomous_system_number":       mmdbtype.Uint64(99999),
-		"autonomous_system_organization": mmdbtype.String("test-asn-org"),
+		"autonomous_system_organization": mmdbtype.String(org),
 	}
 
 	require.NoError(t, writer.Insert(netipRange(pfx), record))
@@ -216,6 +221,81 @@ func TestLookup_ASNFromMaxMind(t *testing.T) {
 	require.NotNil(t, result.ASN)
 	assert.Equal(t, ASN(99999), result.ASN.ASN)
 	assert.Equal(t, "test-asn-org", result.ASN.Handle)
+}
+
+func TestLookup_MaxMindASNOrganizationSetsPossibleDatacenter(t *testing.T) {
+	ds := newTestDataset()
+	ds.asnReader = createTestASNReaderWithOrg(t, "Example Hosting Limited")
+
+	result := ds.Lookup(netip.MustParseAddr("8.8.8.8"))
+
+	assert.Contains(t, result.Flags, IPFlagPossibleDatacenter)
+}
+
+func TestLookup_MaxMindASNOrganizationAddsPossibleDatacenterWhenIPverseDoesNot(t *testing.T) {
+	ds := newTestDataset()
+	ds.asnReader = createTestASNReaderWithOrg(t, "Example Hosting Limited")
+	ds.asns[99999] = asnEntry{handle: "EXAMPLE-ISP", description: "Example Telecom LLC"}
+
+	result := ds.Lookup(netip.MustParseAddr("8.8.8.8"))
+
+	assert.Contains(t, result.Flags, IPFlagPossibleDatacenter)
+}
+
+func TestLookup_PrefixASNUsesMaxMindOrganizationForPossibleDatacenter(t *testing.T) {
+	ds := newTestDataset()
+	ds.asnReader = createTestASNReaderWithOrg(t, "Example Hosting Limited")
+	pfx := netip.MustParsePrefix("8.0.0.0/8")
+	ds.prefixes.Insert(pfx, 0)
+	ds.prefixEntries = append(ds.prefixEntries, prefixEntry{asn: 99999})
+	ds.asns[99999] = asnEntry{handle: "EXAMPLE-ISP", description: "Example Telecom LLC"}
+
+	result := ds.Lookup(netip.MustParseAddr("8.8.8.8"))
+
+	require.NotNil(t, result.ASN)
+	assert.Equal(t, "EXAMPLE-ISP", result.ASN.Handle)
+	assert.Contains(t, result.Flags, IPFlagPossibleDatacenter)
+}
+
+func TestLookup_MaxMindASNOrganizationPossibleDatacenterSkippedWhenDatacenter(t *testing.T) {
+	ds := newTestDataset()
+	ds.asnReader = createTestASNReaderWithOrg(t, "Example Hosting Limited")
+	ds.asns[99999] = asnEntry{isDatacenter: true}
+
+	result := ds.Lookup(netip.MustParseAddr("8.8.8.8"))
+
+	assert.Contains(t, result.Flags, IPFlagDatacenter)
+	assert.NotContains(t, result.Flags, IPFlagPossibleDatacenter)
+}
+
+func TestLookup_MaxMindASNAppliesMetadataFlags(t *testing.T) {
+	ds := newTestDataset()
+	ds.asnReader = createTestASNReaderWithOrg(t, "Example Telecom LLC")
+	ds.asns[99999] = asnEntry{
+		handle:               "TEST-AS",
+		description:          "Test Hosting Limited",
+		isPossibleDatacenter: true,
+		isHighRisk:           true,
+	}
+
+	result := ds.Lookup(netip.MustParseAddr("8.8.8.8"))
+
+	require.NotNil(t, result.ASN)
+	assert.Equal(t, "TEST-AS", result.ASN.Handle)
+	assert.Equal(t, "Test Hosting Limited", result.ASN.Description)
+	assert.Contains(t, result.Flags, IPFlagPossibleDatacenter)
+	assert.Contains(t, result.Flags, IPFlagHighRiskASN)
+}
+
+func TestLookup_MaxMindASNPossibleDatacenterSkippedWhenDatacenter(t *testing.T) {
+	ds := newTestDataset()
+	ds.asnReader = createTestASNReader(t)
+	ds.asns[99999] = asnEntry{isDatacenter: true, isPossibleDatacenter: true}
+
+	result := ds.Lookup(netip.MustParseAddr("8.8.8.8"))
+
+	assert.Contains(t, result.Flags, IPFlagDatacenter)
+	assert.NotContains(t, result.Flags, IPFlagPossibleDatacenter)
 }
 
 func TestLookup_MaxMindASNHandleFallback(t *testing.T) {

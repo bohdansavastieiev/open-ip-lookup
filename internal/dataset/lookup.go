@@ -67,6 +67,7 @@ func (d *Dataset) Lookup(ip netip.Addr) IPResult {
 	result.Kind = IPKindRoutable
 
 	var allFlags IPFlag
+	var possibleDatacenter bool
 
 	pfx := netip.PrefixFrom(ip, ip.BitLen())
 	for prefix, entryIndex := range d.prefixes.Supernets(pfx) {
@@ -87,25 +88,7 @@ func (d *Dataset) Lookup(ip netip.Addr) IPResult {
 				ASN:     entry.asn,
 				Network: prefix,
 			}
-
-			entry, ok := d.asns[result.ASN.ASN]
-			if !ok {
-				continue
-			}
-
-			result.ASN.Handle = entry.handle
-			result.ASN.Description = entry.description
-			result.ASN.Country = entry.country
-			result.ASN.CountryISO = entry.countryCode
-			result.ASN.Category = entry.category
-			result.ASN.NetworkRole = entry.networkRole
-
-			if entry.isDC {
-				allFlags |= IPFlagDatacenter
-			}
-			if entry.isBad {
-				allFlags |= IPFlagLowReputation
-			}
+			d.mergeASNInfo(result.ASN, &allFlags, &possibleDatacenter)
 		}
 	}
 
@@ -118,8 +101,28 @@ func (d *Dataset) Lookup(ip netip.Addr) IPResult {
 		}
 	}
 
+	if d.asnReader != nil && shouldLookupMaxMindASN(result.ASN, allFlags, possibleDatacenter) {
+		asnRecord, err := d.asnReader.ASN(ip)
+		if err == nil && asnRecord.AutonomousSystemNumber != 0 {
+			if hasPossibleDatacenterKeywords("", asnRecord.AutonomousSystemOrganization) {
+				possibleDatacenter = true
+			}
+			if result.ASN == nil {
+				result.ASN = &ASNInfo{
+					ASN:     ASN(safeUint32(asnRecord.AutonomousSystemNumber)),
+					Network: asnRecord.Network,
+					Handle:  asnRecord.AutonomousSystemOrganization,
+				}
+				d.mergeASNInfo(result.ASN, &allFlags, &possibleDatacenter)
+			}
+		}
+	}
+
 	if allFlags&IPFlagProxyHighConf != 0 {
 		allFlags &^= IPFlagProxyLowConf
+	}
+	if possibleDatacenter && allFlags&IPFlagDatacenter == 0 {
+		allFlags |= IPFlagPossibleDatacenter
 	}
 
 	if d.geoReader != nil {
@@ -138,19 +141,39 @@ func (d *Dataset) Lookup(ip netip.Addr) IPResult {
 	}
 
 	result.Flags = allFlags.ActiveFlags()
+	return result
+}
 
-	if result.ASN == nil && d.asnReader != nil {
-		asnRecord, err := d.asnReader.ASN(ip)
-		if err == nil && asnRecord.AutonomousSystemNumber != 0 {
-			result.ASN = &ASNInfo{
-				ASN:     ASN(safeUint32(asnRecord.AutonomousSystemNumber)),
-				Network: asnRecord.Network,
-				Handle:  asnRecord.AutonomousSystemOrganization,
-			}
-		}
+func shouldLookupMaxMindASN(info *ASNInfo, allFlags IPFlag, possibleDatacenter bool) bool {
+	return info == nil || (allFlags&IPFlagDatacenter == 0 && !possibleDatacenter)
+}
+
+func (d *Dataset) mergeASNInfo(info *ASNInfo, allFlags *IPFlag, possibleDatacenter *bool) {
+	entry, ok := d.asns[info.ASN]
+	if !ok {
+		return
 	}
 
-	return result
+	if info.Handle == "" || entry.description != "" {
+		info.Handle = entry.handle
+	}
+	if entry.description != "" {
+		info.Description = entry.description
+	}
+	info.Country = entry.country
+	info.CountryISO = entry.countryCode
+	info.Category = entry.category
+	info.NetworkRole = entry.networkRole
+
+	if entry.isDatacenter {
+		*allFlags |= IPFlagDatacenter
+	}
+	if entry.isPossibleDatacenter {
+		*possibleDatacenter = true
+	}
+	if entry.isHighRisk {
+		*allFlags |= IPFlagHighRiskASN
+	}
 }
 
 func firstSubdivision(record *geoip2.City) string {
