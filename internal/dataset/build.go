@@ -158,7 +158,10 @@ func (b *builder) buildCloudProviders() {
 				service:  first.service,
 				region:   first.region,
 			})
-			b.insertPrefix(prefix, prefixEntry{cloudProviderIndex: cloudProviderIndex})
+			b.insertPrefix(prefix, prefixEntry{
+				flags:              IPFlagDatacenter,
+				cloudProviderIndex: cloudProviderIndex,
+			})
 		}
 	}
 
