@@ -177,6 +177,7 @@ async function loadSharedLookup(bearer) {
 		loadReport(report);
 		renderApp();
 		hideStatus();
+		scrollToLookupOutput();
 	} catch (err) {
 		clearSharedHash();
 		showError(`Shared lookup unavailable. ${err.message}`);
