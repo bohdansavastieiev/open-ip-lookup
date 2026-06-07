@@ -86,7 +86,7 @@ func TestScanCSVSource_StripsUTF8BOM(t *testing.T) {
 	path := writeTempScanFile(t, "source.csv", "\uFEFF# header\nvalue\nok\n")
 
 	var values []string
-	acceptedCount, err := scanCSVSource(path, 1, nil, func(record testCSVValueRecord) (bool, error) {
+	acceptedCount, err := scanCSVSource(path, 1, nil, nil, func(record testCSVValueRecord) (bool, error) {
 		values = append(values, record.Value)
 		return true, nil
 	})
@@ -104,6 +104,7 @@ func TestScanCSVBody_UsesConfigure(t *testing.T) {
 		func(r *csv.Reader) {
 			r.Comma = ';'
 		},
+		nil,
 		func(record testCSVPairRecord) (bool, error) {
 			records = append(records, record)
 			return true, nil
@@ -119,6 +120,7 @@ func TestScanCSVBody_ReturnsErrorWhenHandlerFails(t *testing.T) {
 	_, err := scanCSVBody(
 		strings.NewReader("value\nfirst\nsecond\n"),
 		"source.csv",
+		nil,
 		nil,
 		func(record testCSVValueRecord) (bool, error) {
 			if record.Value == "second" {

@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -78,6 +80,7 @@ func scanCSVSource[T any](
 	path string,
 	skipLines int,
 	configure csvReaderConfigurer,
+	logger *slog.Logger,
 	handler csvRecordHandler[T],
 ) (acceptedCount int, err error) {
 	f, err := os.Open(path)
@@ -97,18 +100,23 @@ func scanCSVSource[T any](
 		}
 	}
 
-	return scanCSVBody(br, path, configure, handler)
+	return scanCSVBody(br, path, configure, logger, handler)
 }
 
 func scanCSVBody[T any](
 	r io.Reader,
 	path string,
 	configure csvReaderConfigurer,
+	logger *slog.Logger,
 	handler csvRecordHandler[T],
 ) (acceptedCount int, err error) {
 	rdr := csv.NewReader(r)
 	if configure != nil {
 		configure(rdr)
+	}
+	skipFieldCountErrors := rdr.FieldsPerRecord < 0
+	if skipFieldCountErrors {
+		rdr.FieldsPerRecord = 0
 	}
 
 	var zero T
@@ -123,6 +131,21 @@ func scanCSVBody[T any](
 			break
 		}
 		if err != nil {
+			if skipFieldCountErrors && errors.Is(err, csv.ErrFieldCount) {
+				if logger != nil {
+					line := i
+					var parseErr *csv.ParseError
+					if errors.As(err, &parseErr) {
+						line = parseErr.Line
+					}
+					logger.Warn(
+						"csv record skipped",
+						slog.Int("line", line),
+						slog.Any("err", err),
+					)
+				}
+				continue
+			}
 			return 0, fmt.Errorf("read CSV source %q at record %d: %w", path, i, err)
 		}
 

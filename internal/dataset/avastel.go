@@ -3,6 +3,7 @@ package dataset
 import (
 	"encoding/csv"
 	"fmt"
+	"log/slog"
 	"net/netip"
 )
 
@@ -26,7 +27,10 @@ type avastelMultidayRecord struct {
 	Confidence float32      `csv:"confidence"`
 }
 
-func loadAvastelInfoByAddr(path string) (map[netip.Addr]avastelAddrInfo, error) {
+func loadAvastelInfoByAddr(
+	path string,
+	logger *slog.Logger,
+) (map[netip.Addr]avastelAddrInfo, error) {
 	infoByAddr := make(map[netip.Addr]avastelAddrInfo)
 	skipLines := 4
 
@@ -46,7 +50,7 @@ func loadAvastelInfoByAddr(path string) (map[netip.Addr]avastelAddrInfo, error) 
 		return true, nil
 	}
 
-	counter, err := scanCSVSource(path, skipLines, configureAvastelCSV, handleRecord)
+	counter, err := scanCSVSource(path, skipLines, configureAvastelCSV, logger, handleRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +61,10 @@ func loadAvastelInfoByAddr(path string) (map[netip.Addr]avastelAddrInfo, error) 
 	return infoByAddr, nil
 }
 
-func loadAvastelInfoByPrefix(path string) (map[netip.Prefix]avastelPrefixInfo, error) {
+func loadAvastelInfoByPrefix(
+	path string,
+	logger *slog.Logger,
+) (map[netip.Prefix]avastelPrefixInfo, error) {
 	infoByPrefix := make(map[netip.Prefix]avastelPrefixInfo)
 	skipLines := 4
 
@@ -79,7 +86,7 @@ func loadAvastelInfoByPrefix(path string) (map[netip.Prefix]avastelPrefixInfo, e
 		return true, nil
 	}
 
-	counter, err := scanCSVSource(path, skipLines, configureAvastelCSV, handleRecord)
+	counter, err := scanCSVSource(path, skipLines, configureAvastelCSV, logger, handleRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -92,4 +99,5 @@ func loadAvastelInfoByPrefix(path string) (map[netip.Prefix]avastelPrefixInfo, e
 
 func configureAvastelCSV(r *csv.Reader) {
 	r.Comma = ';'
+	r.FieldsPerRecord = -1
 }

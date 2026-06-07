@@ -18,12 +18,27 @@ type snapshot map[source.ID]any
 type loadFunc func(sourceID source.ID, path string) (any, error)
 
 type loadSourceFunc[T any] func(path string) (T, error)
+type loadSourceLoggerFunc[T any] func(path string, logger *slog.Logger) (T, error)
 
 func loadSourceEntry[T any](
 	loader loadSourceFunc[T],
 ) func(sourceID source.ID, path string) (any, error) {
 	return func(sourceID source.ID, path string) (any, error) {
 		data, err := loader(path)
+		if err != nil {
+			return nil, fmt.Errorf("load source %q (path: %q): %w", sourceID, path, err)
+		}
+		return data, nil
+	}
+}
+
+func loadSourceEntryWithLogger[T any](
+	loader loadSourceLoggerFunc[T],
+	logger *slog.Logger,
+) func(sourceID source.ID, path string) (any, error) {
+	return func(sourceID source.ID, path string) (any, error) {
+		sourceLogger := logger.With(slog.String("source", string(sourceID)))
+		data, err := loader(path, sourceLogger)
 		if err != nil {
 			return nil, fmt.Errorf("load source %q (path: %q): %w", sourceID, path, err)
 		}
@@ -51,13 +66,22 @@ func loadSnapshot(dataDir string, sourceIDs []source.ID, logger *slog.Logger) (s
 		source.RezmossCloudProviders:        loadSourceEntry(loadRezmossAllProviders),
 		source.Az0VPNIP:                     loadSourceEntry(loadAz0VPNIP),
 		source.Az0VPNHostname:               loadSourceEntry(loadAz0VPNHostname),
-		source.AvastelBotIPsLists1Day:       loadSourceEntry(loadAvastelInfoByAddr),
-		source.AvastelBotIPsLists5Day:       loadSourceEntry(loadAvastelInfoByPrefix),
-		source.AvastelBotIPsLists8Day:       loadSourceEntry(loadAvastelInfoByPrefix),
-		source.BountyyfiBadASNListAll:       loadSourceEntry(loadBountyyfiBadASN),
-		source.UmkusIPIndexASNDCs:           loadSourceEntry(loadUmkusASNDCs),
-		source.IPVerseASIPBlocksAll:         loadSourceEntry(loadIPVerseASBlocks),
-		source.IPVerseASMetadataAll:         loadSourceEntry(loadIPVerseASMetadata),
+		source.AvastelBotIPsLists1Day: loadSourceEntryWithLogger(
+			loadAvastelInfoByAddr,
+			logger,
+		),
+		source.AvastelBotIPsLists5Day: loadSourceEntryWithLogger(
+			loadAvastelInfoByPrefix,
+			logger,
+		),
+		source.AvastelBotIPsLists8Day: loadSourceEntryWithLogger(
+			loadAvastelInfoByPrefix,
+			logger,
+		),
+		source.BountyyfiBadASNListAll: loadSourceEntry(loadBountyyfiBadASN),
+		source.UmkusIPIndexASNDCs:     loadSourceEntry(loadUmkusASNDCs),
+		source.IPVerseASIPBlocksAll:   loadSourceEntry(loadIPVerseASBlocks),
+		source.IPVerseASMetadataAll:   loadSourceEntry(loadIPVerseASMetadata),
 	}
 
 	s := make(snapshot)

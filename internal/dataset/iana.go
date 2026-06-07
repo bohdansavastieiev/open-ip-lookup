@@ -60,7 +60,7 @@ func loadIANASource(path string, version ipVersion) (map[netip.Prefix]ianaInfo, 
 		return true, nil
 	}
 
-	counter, err := scanCSVSource(path, 0, nil, handleRecord)
+	counter, err := scanCSVSource(path, 0, nil, nil, handleRecord)
 	if err != nil {
 		return nil, err
 	}
