@@ -9,6 +9,13 @@ const SORT_DIRECTION = Object.freeze({
 	desc: "desc",
 });
 
+const TABLE_MODE = Object.freeze({
+	copy: "copy",
+	details: "details",
+});
+
+const TABLE_MODE_COOKIE = "open_ip_lookup_table_mode";
+
 const TABLE_COLUMNS = Object.freeze([
 	{ key: "ip", label: "IP" },
 	{ key: "occurrences", label: "Input" },
@@ -50,9 +57,11 @@ const state = {
 	filters: new Map(),
 	flagFilters: new Set(),
 	expandedRows: new Set(),
+	tableMode: readTableModeCookie(),
 	openFilterKey: null,
 	isBusy: false,
 	isSharing: false,
+	copyMessageReset: null,
 	lastLookupInput: null,
 	lastLookupBody: null,
 	lastLookupReport: null,
@@ -281,9 +290,23 @@ function handleResultsClick(event) {
 		return;
 	}
 
+	const tableModeButton = event.target.closest("[data-table-mode-button]");
+	if (tableModeButton) {
+		toggleTableMode();
+		return;
+	}
+
 	const sortButton = event.target.closest("[data-sort-key]");
 	if (sortButton) {
 		cycleSort(sortButton.dataset.sortKey);
+		return;
+	}
+
+	if (state.tableMode === TABLE_MODE.copy) {
+		const copyCell = event.target.closest("td[data-copy-value]");
+		if (copyCell) {
+			void copyCellValue(copyCell);
+		}
 		return;
 	}
 
@@ -419,6 +442,24 @@ function resetResultInteractionState() {
 	state.flagFilters = new Set();
 	state.expandedRows = new Set();
 	state.openFilterKey = null;
+	clearCellCopyMessage();
+}
+
+function readTableModeCookie() {
+	const cookie = document.cookie
+		.split("; ")
+		.find((item) => item.startsWith(`${TABLE_MODE_COOKIE}=`));
+	const mode = cookie?.slice(TABLE_MODE_COOKIE.length + 1);
+	return isTableMode(mode) ? mode : TABLE_MODE.details;
+}
+
+function writeTableModeCookie(mode) {
+	const maxAge = 60 * 60 * 24 * 365;
+	document.cookie = `${TABLE_MODE_COOKIE}=${mode}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
+}
+
+function isTableMode(mode) {
+	return Object.values(TABLE_MODE).includes(mode);
 }
 
 function normalizeReport(report) {
@@ -1016,6 +1057,7 @@ function renderResults(rows, visibleCount) {
 
 	const table = document.createElement("table");
 	table.className = "results-table";
+	table.dataset.tableMode = state.tableMode;
 	table.append(
 		renderTableColgroup(),
 		renderTableHead(),
@@ -1029,8 +1071,72 @@ function renderResults(rows, visibleCount) {
 function renderResultsHeader(visibleCount) {
 	const header = document.createElement("div");
 	header.className = "results-header";
-	header.append(renderResultsStats(visibleCount), renderShareButton());
+	header.append(renderResultsStats(visibleCount), renderResultsActions());
 	return header;
+}
+
+function renderResultsActions() {
+	const actions = document.createElement("div");
+	actions.className = "results-actions";
+	actions.append(renderTableModeControl(), renderShareControl());
+	return actions;
+}
+
+function renderTableModeControl() {
+	const shell = document.createElement("div");
+	shell.className = "table-mode-shell";
+	shell.append(renderTableModeButton(), renderTableModeTooltip());
+	return shell;
+}
+
+function renderTableModeButton() {
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "table-mode-button";
+	button.dataset.tableModeButton = "true";
+	button.dataset.tableMode = state.tableMode;
+	button.textContent = `Mode: ${tableModeLabel(state.tableMode)}`;
+	const nextLabel = tableModeLabel(nextTableMode());
+	button.setAttribute("aria-label", `Switch table to ${nextLabel} mode`);
+	button.setAttribute("aria-describedby", "table-mode-help");
+	return button;
+}
+
+function renderTableModeTooltip() {
+	const tooltip = document.createElement("div");
+	tooltip.id = "table-mode-help";
+	tooltip.className = "table-mode-tooltip";
+	tooltip.setAttribute("role", "tooltip");
+	tooltip.append(
+		tableModeTooltipLine("Row details", "Click a row to show extended information."),
+		tableModeTooltipLine("Copy cells", "Click a table cell to copy its visible value."),
+	);
+	return tooltip;
+}
+
+function tableModeTooltipLine(label, text) {
+	const line = document.createElement("p");
+	line.textContent = `${label}: ${text}`;
+	return line;
+}
+
+function renderShareControl() {
+	const shell = document.createElement("div");
+	shell.className = "share-shell";
+	shell.append(renderShareButton(), renderShareTooltip());
+	return shell;
+}
+
+function renderShareTooltip() {
+	const tooltip = document.createElement("div");
+	tooltip.id = "share-lookup-help";
+	tooltip.className = "share-tooltip";
+	tooltip.setAttribute("role", "tooltip");
+	tooltip.textContent = [
+		"Copy a link to the current lookup.",
+		"Links expire after 7 days without visits.",
+	].join(" ");
+	return tooltip;
 }
 
 function renderShareButton() {
@@ -1038,6 +1144,7 @@ function renderShareButton() {
 	button.type = "button";
 	button.className = "button-ghost results-share-button";
 	button.dataset.shareButton = "true";
+	button.setAttribute("aria-describedby", "share-lookup-help");
 	updateShareButton(button);
 	return button;
 }
@@ -1150,7 +1257,7 @@ function renderTableBody(rows) {
 
 	for (const row of rows) {
 		body.appendChild(renderSummaryRow(row));
-		if (isExpandable(row) && state.expandedRows.has(row.index)) {
+		if (canExpandRow(row) && state.expandedRows.has(row.index)) {
 			body.appendChild(renderDetailRow(row));
 		}
 	}
@@ -1161,7 +1268,7 @@ function renderTableBody(rows) {
 function renderSummaryRow(row) {
 	const tr = document.createElement("tr");
 	tr.className = "result-row";
-	if (isExpandable(row)) {
+	if (canExpandRow(row)) {
 		const expanded = state.expandedRows.has(row.index);
 		tr.dataset.expandRow = String(row.index);
 		tr.dataset.expanded = String(expanded);
@@ -1192,12 +1299,14 @@ function renderSummaryRow(row) {
 function occurrenceCell(count) {
 	const td = document.createElement("td");
 	td.className = "result-cell";
+	const text = `${count.toLocaleString()}x`;
+	setCellCopyValue(td, text);
 
 	const badge = document.createElement("span");
 	badge.className = "occurrence-count result-row-text";
 	badge.dataset.rowContent = "true";
 	badge.dataset.repeated = String(count > 1);
-	badge.textContent = `${count.toLocaleString()}x`;
+	badge.textContent = text;
 
 	td.appendChild(badge);
 	return td;
@@ -1206,6 +1315,7 @@ function occurrenceCell(count) {
 function renderIpCell(row) {
 	const td = document.createElement("td");
 	td.className = "result-text-cell";
+	setCellCopyValue(td, row.ip);
 
 	const ip = resultRowText(row.ip);
 	ip.classList.add("result-ip-address");
@@ -1218,10 +1328,12 @@ function valueCell(value) {
 	const td = document.createElement("td");
 	if (!value) {
 		td.className = "result-empty-cell";
+		setCellCopyValue(td, "—");
 		td.appendChild(resultRowText("—"));
 		return td;
 	}
 	td.className = "result-text-cell";
+	setCellCopyValue(td, value);
 	td.appendChild(resultRowText(value));
 	return td;
 }
@@ -1234,6 +1346,10 @@ function resultRowText(value) {
 	return span;
 }
 
+function setCellCopyValue(td, value) {
+	td.dataset.copyValue = value || "—";
+}
+
 function countryCell(row) {
 	const value = countryValue(row, true);
 	if (!value) {
@@ -1242,6 +1358,7 @@ function countryCell(row) {
 
 	const td = document.createElement("td");
 	td.className = "result-text-cell";
+	setCellCopyValue(td, row.country);
 	td.appendChild(value);
 	return td;
 }
@@ -1289,9 +1406,10 @@ function countryFlagPath(countryIso) {
 	return `/static/flags/4x3/${code}.svg`;
 }
 
-function nodeCell(node) {
+function nodeCell(node, copyValue = node.textContent) {
 	const td = document.createElement("td");
 	td.className = "result-cell";
+	setCellCopyValue(td, copyValue);
 	td.appendChild(node);
 	return td;
 }
@@ -1300,6 +1418,7 @@ function nonRoutableSummaryCell(row) {
 	const td = document.createElement("td");
 	td.className = "result-text-cell";
 	td.colSpan = 4;
+	setCellCopyValue(td, nonRoutableSummaryValue(row));
 
 	const wrapper = document.createElement("span");
 	wrapper.className = "non-routable-summary";
@@ -1317,16 +1436,23 @@ function nonRoutableSummaryCell(row) {
 	return td;
 }
 
+function nonRoutableSummaryValue(row) {
+	const rfc = row.entry.specialUse?.rfc;
+	return rfc ? `${nonRoutableText(row)} ${rfc}` : nonRoutableText(row);
+}
+
 function flagsCell(flags, showEmptyMarker = true) {
 	const td = document.createElement("td");
 	if (flags.length === 0) {
 		td.className = "result-empty-cell";
+		setCellCopyValue(td, "—");
 		if (showEmptyMarker) {
 			td.appendChild(resultRowText("—"));
 		}
 		return td;
 	}
 	td.className = "result-cell";
+	setCellCopyValue(td, flags.join(", "));
 
 	const list = document.createElement("div");
 	list.className = "flag-list";
@@ -1379,6 +1505,10 @@ function renderDetailRow(row) {
 
 function isExpandable(row) {
 	return row.kind === IP_KIND.routable;
+}
+
+function canExpandRow(row) {
+	return state.tableMode === TABLE_MODE.details && isExpandable(row);
 }
 
 function renderDetails(row) {
@@ -1750,6 +1880,63 @@ function clearFlagValue(flag) {
 function toggleFilterMenu(key) {
 	state.openFilterKey = state.openFilterKey === key ? null : key;
 	renderApp();
+}
+
+function toggleTableMode() {
+	state.tableMode = nextTableMode();
+	writeTableModeCookie(state.tableMode);
+	if (state.tableMode === TABLE_MODE.copy) {
+		state.expandedRows = new Set();
+	}
+	clearCellCopyMessage();
+	renderApp();
+}
+
+function nextTableMode() {
+	return state.tableMode === TABLE_MODE.copy ? TABLE_MODE.details : TABLE_MODE.copy;
+}
+
+function tableModeLabel(mode) {
+	return mode === TABLE_MODE.details ? "Row details" : "Copy cells";
+}
+
+async function copyCellValue(cell) {
+	try {
+		await copyText(cell.dataset.copyValue);
+		showCellCopyMessage(cell);
+	} catch (err) {
+		showError(err.message);
+	}
+}
+
+function showCellCopyMessage(cell) {
+	clearCellCopyMessage();
+
+	const rect = cell.getBoundingClientRect();
+	const message = document.createElement("span");
+	message.className = "cell-copy-message";
+	message.setAttribute("role", "status");
+	message.textContent = "Copied";
+	message.style.left = `${rect.left + 12}px`;
+	message.style.top = `${rect.top}px`;
+	document.body.appendChild(message);
+
+	state.copyMessageReset = window.setTimeout(() => {
+		message.remove();
+		state.copyMessageReset = null;
+	}, 1200);
+}
+
+function clearCellCopyMessage() {
+	document.querySelector(".cell-copy-message")?.remove();
+	clearCopyMessageReset();
+}
+
+function clearCopyMessageReset() {
+	if (state.copyMessageReset) {
+		window.clearTimeout(state.copyMessageReset);
+		state.copyMessageReset = null;
+	}
 }
 
 function activeFilterCount() {
