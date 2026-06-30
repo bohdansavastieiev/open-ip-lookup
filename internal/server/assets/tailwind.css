@@ -112,6 +112,14 @@
     @apply enabled:hover:bg-slate-900 enabled:hover:text-cyan-100;
   }
 
+  .scroll-to-lookup-button {
+    @apply fixed bottom-4 right-4 z-40 inline-flex items-center justify-center rounded-2xl;
+    @apply border border-cyan-400/40 bg-slate-950/95 px-4 py-3;
+    @apply text-sm font-semibold text-cyan-100 shadow-2xl shadow-slate-950/60 backdrop-blur;
+    @apply transition hover:border-cyan-300 hover:bg-slate-900 focus:outline-none;
+    @apply focus:ring-2 focus:ring-cyan-400/40 sm:bottom-6 sm:right-6;
+  }
+
   .lookup-status {
     @apply rounded-2xl border px-4 py-3 text-sm;
   }

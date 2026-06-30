@@ -48,6 +48,7 @@ const resultsNode = document.querySelector("[data-lookup-results]");
 const submitButton = document.querySelector("[data-submit-button]");
 const textEncoder = new TextEncoder();
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const scrollToLookupButton = renderScrollToLookupButton();
 
 const state = {
 	mode: "client",
@@ -71,12 +72,17 @@ const state = {
 	shareButtonReset: null,
 };
 
+document.body.appendChild(scrollToLookupButton);
+
 form.addEventListener("submit", handleLookupSubmit);
 inputNode.addEventListener("input", updateFormState);
 controlsNode.addEventListener("change", handleControlsChange);
 controlsNode.addEventListener("click", handleControlsClick);
 resultsNode.addEventListener("click", handleResultsClick);
+scrollToLookupButton.addEventListener("click", handleScrollToLookupClick);
 document.addEventListener("click", handleDocumentClick);
+window.addEventListener("scroll", updateScrollToLookupButton, { passive: true });
+window.addEventListener("resize", updateScrollToLookupButton);
 window.addEventListener("hashchange", handleHashChange);
 
 const initialShareBearer = sharedBearerFromHash();
@@ -314,6 +320,10 @@ function handleResultsClick(event) {
 	if (row && isResultRowToggleTarget(event.target, row)) {
 		toggleExpandedRow(Number(row.dataset.expandRow));
 	}
+}
+
+function handleScrollToLookupClick() {
+	form.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
 }
 
 function isResultRowToggleTarget(target, row) {
@@ -557,6 +567,7 @@ function renderInitialState(title = "Loading your IP information...") {
 	controlsNode.hidden = true;
 	resultsNode.className = "results-min-height";
 	resultsNode.replaceChildren(emptyState(title, "", "quiet"));
+	updateScrollToLookupButton();
 }
 
 function renderSharedLookupError(message) {
@@ -567,6 +578,7 @@ function renderSharedLookupError(message) {
 		"Shared lookup unavailable",
 		`${message} Paste IPs to start a new lookup.`,
 	));
+	updateScrollToLookupButton();
 }
 
 function renderClientIPReport() {
@@ -574,6 +586,7 @@ function renderClientIPReport() {
 	controlsNode.hidden = true;
 	resultsNode.replaceChildren();
 	resultsNode.className = "results-min-height";
+	updateScrollToLookupButton();
 
 	const row = state.rows[0];
 	if (!row) {
@@ -595,6 +608,7 @@ function renderClientIPError(message) {
 		"Your IP information is unavailable",
 		`${message} Bulk lookup is still available.`,
 	));
+	updateScrollToLookupButton();
 }
 
 function renderClientIPCard(row) {
@@ -1039,6 +1053,7 @@ function renderResults(rows, visibleCount) {
 			"No IP addresses found",
 			"No IPv4 or IPv6 addresses were found in the submitted text.",
 		));
+		updateScrollToLookupButton();
 		return;
 	}
 
@@ -1052,6 +1067,7 @@ function renderResults(rows, visibleCount) {
 			"Clear filters or choose different values to show results again.",
 		));
 		resultsNode.appendChild(wrapper);
+		updateScrollToLookupButton();
 		return;
 	}
 
@@ -1066,6 +1082,7 @@ function renderResults(rows, visibleCount) {
 
 	wrapper.appendChild(table);
 	resultsNode.appendChild(wrapper);
+	updateScrollToLookupButton();
 }
 
 function renderResultsHeader(visibleCount) {
@@ -1164,6 +1181,16 @@ function renderResultsStats(visibleCount) {
 	}
 	list.appendChild(resultStat("Showing", showingStatValue(visibleCount)));
 	return list;
+}
+
+function renderScrollToLookupButton() {
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "scroll-to-lookup-button";
+	button.hidden = true;
+	button.textContent = "Back to top";
+	button.setAttribute("aria-label", "Back to top");
+	return button;
 }
 
 function resultStat(label, value) {
@@ -2227,6 +2254,17 @@ function updateInputSize() {
 function scrollToLookupOutput() {
 	const target = controlsNode.hidden ? resultsNode : controlsNode;
 	target.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+}
+
+function updateScrollToLookupButton() {
+	scrollToLookupButton.hidden = !shouldShowScrollToLookupButton();
+}
+
+function shouldShowScrollToLookupButton() {
+	const tableHead = resultsNode.querySelector(".results-head");
+	return state.report?.stats.reported > 0
+		&& tableHead
+		&& tableHead.getBoundingClientRect().bottom < 0;
 }
 
 function revealDetailRow(index) {
