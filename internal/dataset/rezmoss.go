@@ -18,7 +18,7 @@ type rezmossInfo struct {
 }
 
 type rezmossRecord struct {
-	Prefix      netip.Prefix `json:"cidr"`
+	Prefix      jsonPrefix   `json:"cidr"`
 	IPVersion   string       `json:"ip_version"`
 	Provider    string       `json:"provider"`
 	Service     string       `json:"service"`

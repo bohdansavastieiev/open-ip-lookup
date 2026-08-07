@@ -12,7 +12,7 @@ type cloudInfo struct {
 }
 
 type tobilgRecord struct {
-	Prefix   netip.Prefix `json:"cidr_block"`
+	Prefix   jsonPrefix `json:"cidr_block"`
 	Provider string       `json:"cloud_provider"`
 	Region   string       `json:"region"`
 }

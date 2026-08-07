@@ -23,6 +23,22 @@ func TestLoadTobilgCloud_MasksPrefixes(t *testing.T) {
 	}, infoByPrefix)
 }
 
+func TestLoadTobilgCloud_CoercesBareIPToHostPrefix(t *testing.T) {
+	path := writeDatasetTestFile(
+		t,
+		`[{"cidr_block":"15.204.231.24","cloud_provider":"OVH","region":"us-east-1"}]`,
+	)
+
+	infoByPrefix, err := loadTobilgCloud(path)
+	require.NoError(t, err)
+	assert.Equal(t, map[netip.Prefix]cloudInfo{
+		netip.MustParsePrefix("15.204.231.24/32"): {
+			provider: "OVH",
+			region:   "us-east-1",
+		},
+	}, infoByPrefix)
+}
+
 func TestLoadTobilgCloud_ReturnsErrorForDuplicateCanonicalPrefix(t *testing.T) {
 	path := testdataPath(t, "tobilg/duplicate-canonical-prefix.json")
 

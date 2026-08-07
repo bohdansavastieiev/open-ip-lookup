@@ -8,11 +8,34 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"strings"
 
 	"github.com/gocarina/gocsv"
 )
+
+// jsonPrefix decodes a JSON string that is either a CIDR ("1.2.3.0/24") or a
+// bare host address ("1.2.3.4"); a bare address becomes a /32 or /128 prefix.
+// Embedding netip.Prefix promotes its methods (IsValid, Masked, Addr, String).
+type jsonPrefix struct {
+	netip.Prefix
+}
+
+func (p *jsonPrefix) UnmarshalText(b []byte) error {
+	s := string(b)
+	if pfx, err := netip.ParsePrefix(s); err == nil {
+		p.Prefix = pfx
+		return nil
+	}
+	addr, err := netip.ParseAddr(s)
+	if err != nil {
+		return fmt.Errorf("parse prefix or address %q: %w", s, err)
+	}
+	p.Prefix = netip.PrefixFrom(addr, addr.BitLen())
+
+	return nil
+}
 
 type textLineHandler func(line string) (accepted bool, err error)
 

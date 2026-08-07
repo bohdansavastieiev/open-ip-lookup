@@ -25,6 +25,36 @@ func TestLoadRezmossAllProviders_MasksPrefixes(t *testing.T) {
 	}, infoByPrefix)
 }
 
+func TestLoadRezmossAllProviders_CoercesBareIPv4ToHostPrefix(t *testing.T) {
+	path := writeDatasetTestFile(
+		t,
+		`[{"cidr":"5.134.119.103","ip_version":"IPv4","provider":"quiccloud"}]`,
+	)
+
+	infoByPrefix, err := loadRezmossAllProviders(path)
+	require.NoError(t, err)
+	assert.Equal(t, map[netip.Prefix][]rezmossInfo{
+		netip.MustParsePrefix("5.134.119.103/32"): {
+			{provider: "quiccloud"},
+		},
+	}, infoByPrefix)
+}
+
+func TestLoadRezmossAllProviders_CoercesBareIPv6ToHostPrefix(t *testing.T) {
+	path := writeDatasetTestFile(
+		t,
+		`[{"cidr":"2606:4700::1","ip_version":"IPv6","provider":"cloudflare"}]`,
+	)
+
+	infoByPrefix, err := loadRezmossAllProviders(path)
+	require.NoError(t, err)
+	assert.Equal(t, map[netip.Prefix][]rezmossInfo{
+		netip.MustParsePrefix("2606:4700::1/128"): {
+			{provider: "cloudflare"},
+		},
+	}, infoByPrefix)
+}
+
 func TestLoadRezmossAllProviders_ReturnsErrorForEmptyProvider(t *testing.T) {
 	path := testdataPath(t, "rezmoss/empty-provider.json")
 
