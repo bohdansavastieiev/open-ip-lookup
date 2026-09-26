@@ -117,11 +117,4 @@ jobs:
 
           ssh -i ~/.ssh/open_ip_lookup_deploy_key \
             -p "$VPS_PORT" \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            'set -euo pipefail
-             cd /opt/open-ip-lookup
-             git fetch origin master
-             git reset --hard origin/master
-             docker compose -f docker-compose.deploy.yml pull
-             docker compose -f docker-compose.deploy.yml up -d --remove-orphans
-             docker image prune -f'
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
