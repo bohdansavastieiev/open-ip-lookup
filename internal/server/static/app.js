@@ -29,6 +29,7 @@ const TABLE_COLUMNS = Object.freeze([
 ]);
 
 const FLAG_FILTER_KEY = "__flags";
+const FILTER_MENU_CLOSE_DELAY_MS = 150;
 const SANCTIONS_FLAGS = Object.freeze(["OFAC", "Possible OFAC", "Sanctioned Country"]);
 const SANCTIONS_NOTICE_FLAGS = Object.freeze([
 	["OFAC", "Cuba, Iran, North Korea, Crimea, and the so-called DNR and LNR."],
@@ -67,6 +68,7 @@ const state = {
 	expandedRows: new Set(),
 	tableMode: readTableModeCookie(),
 	openFilterKey: null,
+	filterMenuCloseTimer: null,
 	isBusy: false,
 	isSharing: false,
 	copyMessageReset: null,
@@ -88,6 +90,8 @@ form.addEventListener("submit", handleLookupSubmit);
 inputNode.addEventListener("input", updateFormState);
 controlsNode.addEventListener("change", handleControlsChange);
 controlsNode.addEventListener("click", handleControlsClick);
+controlsNode.addEventListener("pointerover", handleControlsPointerOver);
+controlsNode.addEventListener("pointerout", handleControlsPointerOut);
 resultsNode.addEventListener("click", handleResultsClick);
 scrollToLookupButton.addEventListener("click", handleScrollToLookupClick);
 document.addEventListener("click", handleDocumentClick);
@@ -290,17 +294,40 @@ function handleControlsClick(event) {
 
 	const filterButton = event.target.closest("[data-filter-menu]");
 	if (filterButton) {
-		toggleFilterMenu(filterButton.dataset.filterMenu);
+		const key = filterButton.dataset.filterMenu;
+		// A mouse opens the menu on hover, so its click must not close it again.
+		if (event.pointerType !== "mouse" || state.openFilterKey !== key) {
+			toggleFilterMenu(key);
+		}
 		return;
 	}
+}
+
+function handleControlsPointerOver(event) {
+	const shell = event.target.closest("[data-menu-shell]");
+	if (event.pointerType !== "mouse" || !shell) {
+		return;
+	}
+	clearTimeout(state.filterMenuCloseTimer);
+	if (state.openFilterKey !== shell.dataset.menuShell) {
+		setOpenFilterMenu(shell.dataset.menuShell);
+	}
+}
+
+// The delay lets the pointer cross the gap between a filter button and its menu.
+function handleControlsPointerOut(event) {
+	const shell = event.target.closest("[data-menu-shell]");
+	if (event.pointerType !== "mouse" || !shell || shell.contains(event.relatedTarget)) {
+		return;
+	}
+	state.filterMenuCloseTimer = setTimeout(() => setOpenFilterMenu(null), FILTER_MENU_CLOSE_DELAY_MS);
 }
 
 function handleDocumentClick(event) {
 	if (!state.openFilterKey || event.target.closest("[data-menu-shell]")) {
 		return;
 	}
-	state.openFilterKey = null;
-	renderApp();
+	setOpenFilterMenu(null);
 }
 
 function handleResultsClick(event) {
@@ -769,8 +796,21 @@ function clientIPNonRoutableGroup(row) {
 function renderApp() {
 	const filteredRows = filterRows(state.rows);
 	const visibleRows = sortRows(filteredRows, state.sort);
+	const scrollTop = window.scrollY;
 	renderControls(state.rows);
 	renderResults(visibleRows, filteredRows.length);
+	keepScrollPosition(scrollTop);
+}
+
+// Filtering can make the page shorter than the current scroll position, and the browser would then
+// scroll up and move the filters away from the pointer. Padding the results keeps the page in place.
+function keepScrollPosition(scrollTop) {
+	resultsNode.style.minHeight = "";
+	const missingHeight = scrollTop + window.innerHeight - document.documentElement.scrollHeight;
+	if (missingHeight > 0) {
+		resultsNode.style.minHeight = `${resultsNode.offsetHeight + missingHeight}px`;
+		window.scrollTo(0, scrollTop);
+	}
 }
 
 function plural(count, singular) {
@@ -2018,8 +2058,16 @@ function clearFlagValue(flag) {
 }
 
 function toggleFilterMenu(key) {
-	state.openFilterKey = state.openFilterKey === key ? null : key;
-	renderApp();
+	setOpenFilterMenu(state.openFilterKey === key ? null : key);
+}
+
+function setOpenFilterMenu(key) {
+	state.openFilterKey = key;
+	for (const shell of controlsNode.querySelectorAll("[data-menu-shell]")) {
+		const isOpen = shell.dataset.menuShell === key;
+		shell.querySelector(".filter-menu").hidden = !isOpen;
+		shell.querySelector("[data-filter-menu]").setAttribute("aria-expanded", String(isOpen));
+	}
 }
 
 function toggleTableMode() {
