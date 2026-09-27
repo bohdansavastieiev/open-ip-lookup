@@ -104,6 +104,27 @@ func TestLookup_ProxyHighConfOverridesLowConf(t *testing.T) {
 	assert.NotContains(t, result.Flags, IPFlagProxyLowConf)
 }
 
+func TestLookup_RelayFlagsOverrideProxy(t *testing.T) {
+	for _, relay := range []IPFlag{IPFlagVPN, IPFlagTorExit} {
+		t.Run(relay.Label(), func(t *testing.T) {
+			ds := newTestDataset()
+			pfx := netip.MustParsePrefix("192.168.1.0/24")
+			ds.prefixes.Insert(pfx, 0)
+			ds.prefixEntries = append(ds.prefixEntries, prefixEntry{flags: IPFlagProxyHighConf})
+
+			addr := netip.MustParseAddr("192.168.1.1")
+			ds.ips[addr] = 0
+			ds.ipEntries = append(ds.ipEntries, ipEntry{flags: relay | IPFlagProxyLowConf})
+
+			result := ds.Lookup(addr)
+
+			assert.Contains(t, result.Flags, relay)
+			assert.NotContains(t, result.Flags, IPFlagProxyHighConf)
+			assert.NotContains(t, result.Flags, IPFlagProxyLowConf)
+		})
+	}
+}
+
 func TestLookup_SpecialUseInfo(t *testing.T) {
 	ds := newTestDataset()
 	pfx := netip.MustParsePrefix("10.0.0.0/8")

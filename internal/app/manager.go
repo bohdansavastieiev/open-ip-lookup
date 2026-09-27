@@ -7,11 +7,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/config"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/dataset"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/notify"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/ofacwatch"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/report"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/server"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/share"
@@ -20,20 +23,23 @@ import (
 )
 
 type Manager struct {
-	cfg    config.Config
-	logger *slog.Logger
+	cfg      config.Config
+	logger   *slog.Logger
+	notifier *notify.Notifier
 
 	mu         sync.RWMutex
 	dataset    *dataset.Dataset
 	hasMaxMind bool
 	shares     *share.Store
 
+	sanctionsNoticeUntil time.Time
+
 	shareCleanupCancel context.CancelFunc
 	shareCleanupDone   <-chan struct{}
 }
 
 func New(cfg config.Config, logger *slog.Logger) *Manager {
-	return &Manager{cfg: cfg, logger: logger}
+	return &Manager{cfg: cfg, logger: logger, notifier: notify.New(logger)}
 }
 
 func (m *Manager) Run(ctx context.Context) error {
@@ -43,16 +49,29 @@ func (m *Manager) Run(ctx context.Context) error {
 	m.logger.Info("share store opened")
 	m.startShareCleanup(ctx)
 
+	noticeUntil, err := sanctionsNoticeUntil(m.cfg.Sources.DataDir, time.Now())
+	if err != nil {
+		return errors.Join(err, m.Close())
+	}
+	m.sanctionsNoticeUntil = noticeUntil
+
 	updater := update.New(m.cfg.Sources, m.logger)
 	events := make(chan update.SyncEvent, 1)
 	errCh := make(chan error, 2)
 	go func() { errCh <- updater.Run(ctx, events) }()
 	m.logger.Info("updater started")
 
+	go ofacwatch.New(m.cfg.Sources.DataDir, m.notifier, m.logger).Run(ctx)
+	m.logger.Info("ofac watcher started")
+
 	var srv *server.Server
 	for {
 		select {
 		case event := <-events:
+			if len(event.Outdated) > 0 {
+				m.notifier.Notify(ctx, "Sources marked outdated: "+joinSourceIDs(event.Outdated))
+			}
+
 			serverStarted := srv != nil
 			if !shouldLoadDataset(event, serverStarted) {
 				continue
@@ -198,6 +217,10 @@ func (m *Manager) HasMaxMind() bool {
 	return m.hasMaxMind
 }
 
+func (m *Manager) ShowSanctionsNotice() bool {
+	return time.Now().Before(m.sanctionsNoticeUntil)
+}
+
 func (m *Manager) Report(raw string) *report.Report {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -240,6 +263,14 @@ func (m *Manager) stopShareCleanup() {
 	<-m.shareCleanupDone
 	m.shareCleanupCancel = nil
 	m.shareCleanupDone = nil
+}
+
+func joinSourceIDs(ids []source.ID) string {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		names = append(names, string(id))
+	}
+	return strings.Join(names, ", ")
 }
 
 func hasMaxMindSources(available []source.ID) bool {

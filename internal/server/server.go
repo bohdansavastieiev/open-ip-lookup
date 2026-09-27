@@ -57,6 +57,7 @@ type Server struct {
 
 type service interface {
 	HasMaxMind() bool
+	ShowSanctionsNotice() bool
 	Report(string) *report.Report
 	LookupIP(netip.Addr) report.IPInfo
 	CreateShare(context.Context, string) (share.Created, error)

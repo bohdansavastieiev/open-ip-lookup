@@ -40,6 +40,10 @@ func (s *fakeLookupService) HasMaxMind() bool {
 	return s.hasMaxMind
 }
 
+func (s *fakeLookupService) ShowSanctionsNotice() bool {
+	return false
+}
+
 func (s *fakeLookupService) Report(raw string) *report.Report {
 	s.reportCalled = true
 	s.reportInput = raw

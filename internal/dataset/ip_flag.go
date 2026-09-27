@@ -11,6 +11,9 @@ const (
 	IPFlagProxyHighConf
 	IPFlagProxyLowConf
 	IPFlagHighRiskASN
+	IPFlagOFAC
+	IPFlagPossibleOFAC
+	IPFlagSanctionedCountry
 )
 
 var ipFlagDefs = []struct {
@@ -25,6 +28,9 @@ var ipFlagDefs = []struct {
 	{IPFlagProxyHighConf, "Proxy"},
 	{IPFlagProxyLowConf, "Possible Proxy"},
 	{IPFlagHighRiskASN, "High-Risk ASN"},
+	{IPFlagOFAC, "OFAC"},
+	{IPFlagPossibleOFAC, "Possible OFAC"},
+	{IPFlagSanctionedCountry, "Sanctioned Country"},
 }
 
 func (f IPFlag) Label() string {

@@ -121,6 +121,9 @@ func (d *Dataset) Lookup(ip netip.Addr) IPResult {
 	if allFlags&IPFlagProxyHighConf != 0 {
 		allFlags &^= IPFlagProxyLowConf
 	}
+	if allFlags&(IPFlagVPN|IPFlagTorExit) != 0 {
+		allFlags &^= IPFlagProxyHighConf | IPFlagProxyLowConf
+	}
 	if possibleDatacenter && allFlags&IPFlagDatacenter == 0 {
 		allFlags |= IPFlagPossibleDatacenter
 	}
@@ -137,8 +140,14 @@ func (d *Dataset) Lookup(ip netip.Addr) IPResult {
 				Longitude:  derefFloat64(geoRecord.Location.Longitude),
 				Timezone:   geoRecord.Location.TimeZone,
 			}
+			allFlags |= geoSanctionsFlags(geoRecord)
 		}
 	}
+
+	if result.ASN != nil {
+		allFlags |= ofacASNFlags[result.ASN.ASN]
+	}
+	allFlags = strongestSanctionsFlag(allFlags)
 
 	result.Flags = allFlags.ActiveFlags()
 	return result

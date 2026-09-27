@@ -35,6 +35,24 @@ You need a free MaxMind account to run the app:
 2. Generate a license key.
 3. Add your Account ID and License Key to your `.env` file.
 
+## Sanctions Flags
+
+Each IP gets at most one sanctions flag, the strongest that applies. The "Sanctioned only" filter shows IPs with any of them.
+
+`OFAC` marks IPs geolocated to territories under comprehensive US sanctions: Cuba, Iran, North Korea, Crimea and Sevastopol, and cities inside the pre-2022 line of the so-called DNR and LNR. It also covers networks of known operators in those regions, which usually geolocate to Russia.
+
+`Possible OFAC` marks the rest of Donetsk and Luhansk oblasts, occupied parts of Zaporizhzhia and Kherson oblasts, and IPs registered in Cuba, Iran or North Korea but geolocated elsewhere.
+
+`Sanctioned Country` marks IPs geolocated to countries under broad targeted US sanctions: Russia, Belarus, Venezuela and Burma.
+
+The flags are intentionally broad and are a screening aid, not a compliance decision.
+
+The lists live in `internal/dataset/ofac.go` and are updated by hand. A daily watcher checks the OFAC SDN list, the eCFR and the Federal Register, and sends an alert when a program behind the lists disappears or a new program, regulation part or relevant document appears.
+
+## Alerts
+
+Alerts about OFAC program changes and outdated sources are always written to the log. To also receive them in Telegram, create a bot with [@BotFather](https://t.me/BotFather) and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
+
 ## Data Sources
 
 The application aggregates data from the following public sources. If you use this tool, you must comply with the upstream licenses and terms of use for these datasets.

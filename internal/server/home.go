@@ -3,14 +3,16 @@ package server
 import "net/http"
 
 type templateData struct {
-	HasMaxMind         bool
-	MaxLookupBodyBytes int
+	HasMaxMind          bool
+	MaxLookupBodyBytes  int
+	ShowSanctionsNotice bool
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	data := templateData{
-		HasMaxMind:         s.service.HasMaxMind(),
-		MaxLookupBodyBytes: maxLookupBodyBytes,
+		HasMaxMind:          s.service.HasMaxMind(),
+		MaxLookupBodyBytes:  maxLookupBodyBytes,
+		ShowSanctionsNotice: s.service.ShowSanctionsNotice(),
 	}
 	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
 		s.logger.Error("render home", "err", err)

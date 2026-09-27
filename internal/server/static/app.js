@@ -15,6 +15,7 @@ const TABLE_MODE = Object.freeze({
 });
 
 const TABLE_MODE_COOKIE = "open_ip_lookup_table_mode";
+const SANCTIONS_NOTICE_COOKIE = "open_ip_lookup_sanctions_notice_seen";
 
 const TABLE_COLUMNS = Object.freeze([
 	{ key: "ip", label: "IP" },
@@ -28,6 +29,12 @@ const TABLE_COLUMNS = Object.freeze([
 ]);
 
 const FLAG_FILTER_KEY = "__flags";
+const SANCTIONS_FLAGS = Object.freeze(["OFAC", "Possible OFAC", "Sanctioned Country"]);
+const SANCTIONS_NOTICE_FLAGS = Object.freeze([
+	["OFAC", "Cuba, Iran, North Korea, Crimea, and the so-called DNR and LNR."],
+	["Possible OFAC", "May be in one of those regions, including other occupied parts of Ukraine."],
+	["Sanctioned Country", "Russia, Belarus, Venezuela, and Burma."],
+]);
 
 const FILTER_GROUPS = Object.freeze([
 	{ key: "family", label: "IP version" },
@@ -73,6 +80,9 @@ const state = {
 };
 
 document.body.appendChild(scrollToLookupButton);
+if (document.body.dataset.sanctionsNotice !== undefined && !hasSanctionsNoticeCookie()) {
+	document.body.appendChild(renderSanctionsNotice());
+}
 
 form.addEventListener("submit", handleLookupSubmit);
 inputNode.addEventListener("input", updateFormState);
@@ -243,6 +253,10 @@ function handleControlsChange(event) {
 	if (flagValue !== undefined) {
 		toggleFlagFilter(flagValue, event.target.checked);
 		return;
+	}
+
+	if (event.target.dataset.sanctionsFilter !== undefined) {
+		toggleSanctionsFilter(event.target.checked);
 	}
 }
 
@@ -773,6 +787,7 @@ function renderControls(rows) {
 
 	const filters = document.createElement("div");
 	filters.className = "filter-list";
+	filters.appendChild(renderSanctionsFilterToggle(isSanctionsFilterSelected()));
 
 	for (const group of FILTER_GROUPS) {
 		const options = filterOptions(rows, group.key);
@@ -1044,6 +1059,25 @@ function renderFlagFilterGroup(flags) {
 	return shell;
 }
 
+function renderSanctionsFilterToggle(selected) {
+	const label = document.createElement("label");
+	label.className = "filter-trigger filter-toggle";
+	label.dataset.selected = String(selected);
+
+	const checkbox = filterCheckbox(selected);
+	checkbox.dataset.sanctionsFilter = "true";
+
+	const text = document.createElement("span");
+	text.textContent = "Sanctioned only";
+
+	label.append(checkbox, text);
+	return label;
+}
+
+function isSanctionsFilterSelected() {
+	return SANCTIONS_FLAGS.every((flag) => state.flagFilters.has(flag));
+}
+
 function renderResults(rows, visibleCount) {
 	resultsNode.replaceChildren();
 	resultsNode.className = "results-min-height";
@@ -1191,6 +1225,74 @@ function renderScrollToLookupButton() {
 	button.textContent = "Back to top";
 	button.setAttribute("aria-label", "Back to top");
 	return button;
+}
+
+function renderSanctionsNotice() {
+	const notice = document.createElement("aside");
+	notice.className = "notice-toast";
+	notice.setAttribute("aria-labelledby", "sanctions-notice-title");
+	const dismiss = () => {
+		writeSanctionsNoticeCookie();
+		notice.remove();
+	};
+
+	const header = document.createElement("div");
+	header.className = "notice-toast-header";
+
+	const title = document.createElement("h2");
+	title.id = "sanctions-notice-title";
+	title.className = "notice-toast-title";
+	title.textContent = "Sanctions flags in results";
+
+	const closeButton = document.createElement("button");
+	closeButton.type = "button";
+	closeButton.className = "notice-toast-close";
+	closeButton.setAttribute("aria-label", "Dismiss");
+	closeButton.textContent = "×";
+	closeButton.addEventListener("click", dismiss);
+	header.append(title, closeButton);
+
+	const intro = document.createElement("p");
+	intro.textContent = "Lookup results now mark IPs located in regions under US sanctions.";
+
+	const flags = document.createElement("dl");
+	flags.className = "notice-flag-list";
+	for (const [flag, description] of SANCTIONS_NOTICE_FLAGS) {
+		const term = document.createElement("dt");
+		const badge = document.createElement("span");
+		badge.className = "flag-badge";
+		badge.textContent = flag;
+		term.appendChild(badge);
+
+		const definition = document.createElement("dd");
+		definition.textContent = description;
+		flags.append(term, definition);
+	}
+
+	const hint = document.createElement("p");
+	hint.className = "notice-toast-hint";
+	const filterName = document.createElement("span");
+	filterName.className = "notice-filter-name";
+	filterName.textContent = "Sanctioned only";
+	hint.append("After a lookup, check ", filterName, " in Filters to show only these IPs.");
+
+	const confirmButton = document.createElement("button");
+	confirmButton.type = "button";
+	confirmButton.className = "button-primary notice-toast-confirm";
+	confirmButton.textContent = "Got it";
+	confirmButton.addEventListener("click", dismiss);
+
+	notice.append(header, intro, flags, hint, confirmButton);
+	return notice;
+}
+
+function hasSanctionsNoticeCookie() {
+	return document.cookie.split("; ").some((item) => item.startsWith(`${SANCTIONS_NOTICE_COOKIE}=`));
+}
+
+function writeSanctionsNoticeCookie() {
+	const maxAge = 60 * 60 * 24 * 30;
+	document.cookie = `${SANCTIONS_NOTICE_COOKIE}=1; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
 }
 
 function resultStat(label, value) {
@@ -1865,6 +1967,17 @@ function toggleFlagFilter(flag, checked) {
 		state.flagFilters.add(flag);
 	} else {
 		state.flagFilters.delete(flag);
+	}
+	renderApp();
+}
+
+function toggleSanctionsFilter(checked) {
+	for (const flag of SANCTIONS_FLAGS) {
+		if (checked) {
+			state.flagFilters.add(flag);
+		} else {
+			state.flagFilters.delete(flag);
+		}
 	}
 	renderApp();
 }
