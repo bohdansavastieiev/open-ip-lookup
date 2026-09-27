@@ -399,6 +399,53 @@ func TestUpdateSources_DirectFileFailureRemovesOutdatedArtifact(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestUpdateSources_RequiredSourceFailureKeepsStaleArtifact(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	dataDir := t.TempDir()
+	u := newTestUpdater(dataDir, source.CymruFullBogonsIPv4, server.URL)
+	def := source.DefinitionFor(source.CymruFullBogonsIPv4)
+	path := filepath.Join(dataDir, def.LocalBaseName)
+	require.NoError(t, os.WriteFile(path, []byte("old"), 0o600))
+	old := time.Now().UTC().Add(-4 * 24 * time.Hour)
+	s := state{
+		SyncSchedule: futureSyncSchedule(),
+		Sources: map[source.ID]sourceState{source.CymruFullBogonsIPv4: {
+			HasLocalArtifact: true,
+			ETag:             "etag-1",
+			LastCheckedAt:    old,
+			LastSuccessAt:    old,
+			LastDownloadedAt: old,
+			RetryableFailure: true,
+			ConsecutiveErrors: []consecutiveError{{
+				Kind:            errorKindNetwork,
+				Message:         "previous failure",
+				Count:           1,
+				FirstHappenedAt: old,
+				LastHappenedAt:  old,
+			}},
+		}},
+	}
+
+	event, err := u.updateSources(
+		context.Background(),
+		SyncScopePartial,
+		[]source.ID{source.CymruFullBogonsIPv4},
+		&s,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, []source.ID{source.CymruFullBogonsIPv4}, event.Available)
+	assert.Empty(t, event.Outdated)
+	assert.True(t, s.Sources[source.CymruFullBogonsIPv4].MarkedOutdatedAt.IsZero())
+	_, err = os.Stat(path)
+	require.NoError(t, err)
+}
+
 func TestUpdateSources_TarGzDirFailureRemovesOutdatedArtifact(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

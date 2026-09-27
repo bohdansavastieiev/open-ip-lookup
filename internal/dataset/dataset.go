@@ -27,6 +27,8 @@ type Dataset struct {
 
 	cloudProviders []cloudProviderInfo
 	vpnProviders   []string
+
+	skippedSources map[source.ID]error
 }
 
 type bogonEntry struct {
@@ -63,18 +65,24 @@ type cloudProviderInfo struct {
 	region   string
 }
 
+// Load builds the dataset from the given sources. A source that fails to load is left out and
+// reported by SkippedSources; Load fails only when a required source is missing.
 func Load(dataDir string, sourceIDs []source.ID, logger *slog.Logger) (*Dataset, error) {
 	if err := validateRequiredSourceIDs(sourceIDs); err != nil {
 		return nil, err
 	}
 
-	snap, err := loadSnapshot(dataDir, sourceIDs, logger)
+	snap, skipped, err := loadSnapshot(dataDir, sourceIDs, logger)
 	if err != nil {
 		return nil, err
 	}
 
 	if err := validateRequiredSourcesSnapshot(snap); err != nil {
-		return nil, err
+		errs := []error{err, snap.Close()}
+		for _, skipErr := range skipped {
+			errs = append(errs, skipErr)
+		}
+		return nil, errors.Join(errs...)
 	}
 
 	ds, err := build(snap, logger)
@@ -85,7 +93,13 @@ func Load(dataDir string, sourceIDs []source.ID, logger *slog.Logger) (*Dataset,
 		return nil, err
 	}
 
+	ds.skippedSources = skipped
 	return ds, nil
+}
+
+// SkippedSources returns the sources left out of the dataset because their files failed to load.
+func (d *Dataset) SkippedSources() map[source.ID]error {
+	return d.skippedSources
 }
 
 func (d *Dataset) Close() error {

@@ -33,6 +33,7 @@ type Manager struct {
 	shares     *share.Store
 
 	sanctionsNoticeUntil time.Time
+	skippedSources       map[source.ID]error
 
 	shareCleanupCancel context.CancelFunc
 	shareCleanupDone   <-chan struct{}
@@ -184,8 +185,27 @@ func (m *Manager) loadDataset(event update.SyncEvent) (*dataset.Dataset, error) 
 		return nil, err
 	}
 
-	m.logger.Info("dataset loaded", slog.Int("available", len(event.Available)))
+	m.reportSkippedSources(ds.SkippedSources())
+	m.logger.Info(
+		"dataset loaded",
+		slog.Int("available", len(event.Available)),
+		slog.Int("skipped", len(ds.SkippedSources())),
+	)
 	return ds, nil
+}
+
+// reportSkippedSources logs a newly skipped source as an error once. While it stays skipped, later
+// reloads only warn, so a broken upstream file is not reported on every reload.
+func (m *Manager) reportSkippedSources(skipped map[source.ID]error) {
+	for id, err := range skipped {
+		level := slog.LevelError
+		if _, reported := m.skippedSources[id]; reported {
+			level = slog.LevelWarn
+		}
+		m.logger.Log(context.Background(), level, "source skipped",
+			slog.String("source", string(id)), slog.Any("err", err))
+	}
+	m.skippedSources = skipped
 }
 
 func shouldLoadDataset(event update.SyncEvent, serverStarted bool) bool {

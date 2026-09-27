@@ -128,9 +128,21 @@ func logSourceRefreshResult(logger *slog.Logger, result sourceRefreshResult) {
 		return
 	}
 	if !result.update.success {
-		logger.Warn(
+		errs := result.update.state.ConsecutiveErrors
+		last := errs[len(errs)-1]
+		level := slog.LevelWarn
+		// Rejected content usually means the upstream format changed and the parser needs a fix.
+		// Only its first occurrence is an error; retries of the same failure stay warnings.
+		if last.Kind == errorKindContent && last.Count == 1 {
+			level = slog.LevelError
+		}
+		logger.Log(
+			context.Background(),
+			level,
 			"source artifact prepare failed",
 			slog.String("source", string(result.id)),
+			slog.String("kind", string(last.Kind)),
+			slog.String("err", last.Message),
 			slog.Bool("retryable", result.update.retryable),
 			slog.Duration("duration", result.duration),
 		)

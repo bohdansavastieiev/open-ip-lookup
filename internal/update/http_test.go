@@ -1,6 +1,7 @@
 package update
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
+	"github.com/maxmind/mmdbwriter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -399,10 +401,21 @@ func TestRefreshHTTPSource_ReturnsFailureForInvalidTarGz(t *testing.T) {
 	assert.Equal(t, errorKindContent, got.state.ConsecutiveErrors[0].Kind)
 }
 
+func testMMDB(t *testing.T, databaseType string) string {
+	t.Helper()
+	writer, err := mmdbwriter.New(mmdbwriter.Options{DatabaseType: databaseType})
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	_, err = writer.WriteTo(&buf)
+	require.NoError(t, err)
+	return buf.String()
+}
+
 func TestRefreshHTTPSource_MaxMindUsesAuthChecksumAndExtractsMMDB(t *testing.T) {
 	t.Setenv(maxMindAccountIDEnv, "account")
 	t.Setenv(maxMindLicenseKeyEnv, "license")
-	archive := newTestTarGz(t, map[string]string{"GeoLite2-City/test.mmdb": "mmdb"})
+	mmdb := testMMDB(t, "GeoLite2-City")
+	archive := newTestTarGz(t, map[string]string{"GeoLite2-City/test.mmdb": mmdb})
 	checksum := fmt.Sprintf("%x  GeoLite2-City.tar.gz\n", sha256.Sum256(archive))
 	var order atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -438,7 +451,25 @@ func TestRefreshHTTPSource_MaxMindUsesAuthChecksumAndExtractsMMDB(t *testing.T) 
 	assert.True(t, got.changed)
 	data, err := os.ReadFile(got.tempPath)
 	require.NoError(t, err)
-	assert.Equal(t, "mmdb", string(data))
+	assert.Equal(t, mmdb, string(data))
+}
+
+func TestRefreshHTTPSource_RejectsRequiredSourceThatFailsToLoad(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", "etag-1")
+		_, _ = w.Write([]byte("<html>maintenance</html>"))
+	}))
+	defer server.Close()
+
+	def := source.DefinitionFor(source.CymruFullBogonsIPv4)
+	def.URL = server.URL
+	got, err := refreshHTTPSource(context.Background(), server.Client(), def, sourceState{}, t.TempDir())
+
+	require.NoError(t, err)
+	assert.False(t, got.success)
+	assert.False(t, got.changed)
+	require.Len(t, got.state.ConsecutiveErrors, 1)
+	assert.Equal(t, errorKindContent, got.state.ConsecutiveErrors[0].Kind)
 }
 
 func TestRefreshHTTPSource_MaxMindHandlesNotModified(t *testing.T) {

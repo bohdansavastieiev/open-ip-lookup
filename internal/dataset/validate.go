@@ -3,6 +3,7 @@ package dataset
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
@@ -54,6 +55,17 @@ var requiredSourceGroups = []sourceGroup{
 		mode:    requireAll,
 		sources: []source.ID{source.IANASpecialIPv4, source.IANASpecialIPv6},
 	},
+}
+
+// RequiresSource reports whether the dataset cannot load without the source. Sources that share an
+// any-of group with another source are not required on their own.
+func RequiresSource(id source.ID) bool {
+	for _, group := range requiredSourceGroups {
+		if group.mode == requireAll && slices.Contains(group.sources, id) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateRequiredSourceIDs(sourceIDs []source.ID) error {

@@ -8,15 +8,21 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/dataset"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
 )
 
 var errInvalidDanIPList = errors.New("dan response is not an IP list")
 
+// validateHTTPArtifact runs before a download replaces the current file. Required sources are loaded
+// in full, so a broken file never reaches the disk and the dataset can always start. The others are
+// cheap to skip at load time, and parsing their large files twice would cost memory.
 func validateHTTPArtifact(definition source.Definition, path string) error {
-	switch definition.ID {
-	case source.DanTorExit, source.DanTorFull:
+	switch {
+	case definition.ID == source.DanTorExit || definition.ID == source.DanTorFull:
 		return validateDanIPList(path)
+	case dataset.RequiresSource(definition.ID):
+		return dataset.ValidateSource(definition.ID, path)
 	default:
 		return nil
 	}

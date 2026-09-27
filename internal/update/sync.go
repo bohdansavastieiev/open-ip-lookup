@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/dataset"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
 )
 
@@ -179,7 +180,8 @@ func (u *Updater) markOutdatedIfExpired(
 	tx *storageTxn,
 ) (bool, error) {
 	st := sources[id]
-	if !st.HasLocalArtifact || !st.MarkedOutdatedAt.IsZero() {
+	// The dataset cannot load without a required source, so its last copy is kept even when stale.
+	if !st.HasLocalArtifact || !st.MarkedOutdatedAt.IsZero() || dataset.RequiresSource(id) {
 		return false, nil
 	}
 	interval, ok := definition.OutdatedInterval()

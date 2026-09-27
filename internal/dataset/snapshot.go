@@ -46,8 +46,8 @@ func loadSourceEntryWithLogger[T any](
 	}
 }
 
-func loadSnapshot(dataDir string, sourceIDs []source.ID, logger *slog.Logger) (snapshot, error) {
-	loaders := map[source.ID]loadFunc{
+func sourceLoaders(logger *slog.Logger) map[source.ID]loadFunc {
+	return map[source.ID]loadFunc{
 		source.MaxMindGeoLite2City: loadSourceEntry(func(path string) (any, error) {
 			return loadMaxMindGeoReader(path, maxmindDBTypeCity)
 		}),
@@ -83,24 +83,35 @@ func loadSnapshot(dataDir string, sourceIDs []source.ID, logger *slog.Logger) (s
 		source.IPVerseASIPBlocksAll:   loadSourceEntry(loadIPVerseASBlocks),
 		source.IPVerseASMetadataAll:   loadSourceEntry(loadIPVerseASMetadata),
 	}
+}
 
-	s := make(snapshot)
+// loadSnapshot skips a source whose file fails to load and returns its error in skipped, so one
+// broken upstream file does not stop the whole dataset from loading.
+func loadSnapshot(
+	dataDir string,
+	sourceIDs []source.ID,
+	logger *slog.Logger,
+) (s snapshot, skipped map[source.ID]error, err error) {
+	loaders := sourceLoaders(logger)
+	s = make(snapshot)
+	skipped = make(map[source.ID]error)
 	for _, id := range sourceIDs {
 		loader, ok := loaders[id]
 		if !ok {
-			return nil, fmt.Errorf("unknown source: %s", id)
+			_ = s.Close()
+			return nil, nil, fmt.Errorf("unknown source: %s", id)
 		}
 
 		def, ok := source.Lookup(id)
 		if !ok {
-			return nil, fmt.Errorf("unknown source definition: %s", id)
+			_ = s.Close()
+			return nil, nil, fmt.Errorf("unknown source definition: %s", id)
 		}
 
-		path := filepath.Join(dataDir, def.LocalBaseName)
-		data, err := loader(id, path)
+		data, err := loader(id, filepath.Join(dataDir, def.LocalBaseName))
 		if err != nil {
-			_ = s.Close()
-			return nil, err
+			skipped[id] = err
+			continue
 		}
 
 		logLoadedSource(logger, id, data)
@@ -108,7 +119,23 @@ func loadSnapshot(dataDir string, sourceIDs []source.ID, logger *slog.Logger) (s
 		s[id] = data
 	}
 
-	return s, nil
+	return s, skipped, nil
+}
+
+// ValidateSource loads one source file the same way Load does and discards the result.
+func ValidateSource(id source.ID, path string) error {
+	loader, ok := sourceLoaders(slog.New(slog.DiscardHandler))[id]
+	if !ok {
+		return fmt.Errorf("unknown source: %s", id)
+	}
+	data, err := loader(id, path)
+	if err != nil {
+		return err
+	}
+	if closer, ok := data.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func (s snapshot) Close() error {
