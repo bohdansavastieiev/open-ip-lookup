@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/config"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/notify"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/source"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/update"
 	"github.com/stretchr/testify/assert"
@@ -80,7 +81,8 @@ func TestShouldKeepServingAfterLoadError(t *testing.T) {
 
 func TestOpenShares_CreatesDBUnderDataDir(t *testing.T) {
 	dataDir := t.TempDir()
-	m := New(config.Config{Sources: config.SourcesConfig{DataDir: dataDir}}, discardLogger())
+	cfg := config.Config{Sources: config.SourcesConfig{DataDir: dataDir}}
+	m := New(cfg, discardLogger(), notify.New(discardLogger()))
 
 	require.NoError(t, m.openShares())
 	t.Cleanup(func() { assert.NoError(t, m.Close()) })
@@ -91,7 +93,8 @@ func TestOpenShares_CreatesDBUnderDataDir(t *testing.T) {
 
 func TestManagerShareMethodsUseStore(t *testing.T) {
 	dataDir := t.TempDir()
-	m := New(config.Config{Sources: config.SourcesConfig{DataDir: dataDir}}, discardLogger())
+	cfg := config.Config{Sources: config.SourcesConfig{DataDir: dataDir}}
+	m := New(cfg, discardLogger(), notify.New(discardLogger()))
 	require.NoError(t, m.openShares())
 	t.Cleanup(func() { assert.NoError(t, m.Close()) })
 

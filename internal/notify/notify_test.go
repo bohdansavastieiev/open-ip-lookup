@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,22 +12,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNotifySendsTelegramMessage(t *testing.T) {
-	var got url.Values
+func telegramServer(t *testing.T) (*httptest.Server, *[]url.Values) {
+	t.Helper()
+	var got []url.Values
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, r.ParseForm())
-		got = r.PostForm
+		got = append(got, r.PostForm)
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
+	return srv, &got
+}
 
-	n := &Notifier{
-		logger:  slog.New(slog.DiscardHandler),
-		client:  srv.Client(),
-		sendURL: srv.URL,
-		chatID:  "42",
-	}
-	n.Notify(t.Context(), "source outdated")
+func TestNotifySendsTelegramMessage(t *testing.T) {
+	srv, got := telegramServer(t)
+	n := newNotifier(slog.New(slog.DiscardHandler), srv.URL, "42")
 
-	assert.Equal(t, "42", got.Get("chat_id"))
-	assert.Equal(t, "source outdated", got.Get("text"))
+	n.Notify("source outdated")
+	n.Close()
+
+	require.Len(t, *got, 1)
+	assert.Equal(t, "42", (*got)[0].Get("chat_id"))
+	assert.Equal(t, "source outdated", (*got)[0].Get("text"))
+}
+
+func TestHandlerSendsOnlyErrors(t *testing.T) {
+	srv, got := telegramServer(t)
+	n := newNotifier(slog.New(slog.DiscardHandler), srv.URL, "42")
+	logger := slog.New(NewHandler(slog.NewTextHandler(io.Discard, nil), n))
+
+	logger.Warn("source refresh failed")
+	logger.Error("create share", slog.String("err", "database is locked"))
+	n.Close()
+
+	require.Len(t, *got, 1)
+	assert.Equal(t, "Error: create share\nerr=database is locked", (*got)[0].Get("text"))
 }

@@ -51,7 +51,7 @@ The lists live in `internal/dataset/ofac.go` and are updated by hand. A daily wa
 
 ## Alerts
 
-Alerts about OFAC program changes and outdated sources are always written to the log. To also receive them in Telegram, create a bot with [@BotFather](https://t.me/BotFather) and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
+Alerts about OFAC program changes and outdated sources are always written to the log. To also receive them and every logged error in Telegram, create a bot with [@BotFather](https://t.me/BotFather) and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
 
 ## Data Sources
 

@@ -2,7 +2,6 @@
 package notify
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,6 +18,8 @@ const (
 	telegramChatIDEnv   = "TELEGRAM_CHAT_ID"
 	telegramAPIURL      = "https://api.telegram.org"
 	sendTimeout         = 30 * time.Second
+	queueSize           = 100
+	closeTimeout        = 10 * time.Second
 
 	// Telegram rejects messages over 4096 characters.
 	telegramMaxMessageLen = 4000
@@ -28,47 +30,92 @@ var (
 	errSendTelegramRequest  = errors.New("send telegram request")
 )
 
+// Notifier sends messages from a background worker, so a slow Telegram never blocks the caller.
 type Notifier struct {
 	logger  *slog.Logger
 	client  *http.Client
 	sendURL string
 	chatID  string
+	queue   chan string
+	pending sync.WaitGroup
 }
 
 // New reads Telegram credentials from the environment. Without them alerts are only logged.
 func New(logger *slog.Logger) *Notifier {
-	n := &Notifier{
-		logger: logger,
-		client: &http.Client{Timeout: sendTimeout},
-		chatID: os.Getenv(telegramChatIDEnv),
-	}
+	chatID := os.Getenv(telegramChatIDEnv)
 	token := os.Getenv(telegramBotTokenEnv)
-	if token != "" && n.chatID != "" {
-		n.sendURL = telegramAPIURL + "/bot" + token + "/sendMessage"
+	var sendURL string
+	if token != "" && chatID != "" {
+		sendURL = telegramAPIURL + "/bot" + token + "/sendMessage"
 	}
-	logger.Info("notifier configured", slog.Bool("telegram", n.sendURL != ""))
+	logger.Info("notifier configured", slog.Bool("telegram", sendURL != ""))
+	return newNotifier(logger, sendURL, chatID)
+}
+
+func newNotifier(logger *slog.Logger, sendURL, chatID string) *Notifier {
+	n := &Notifier{
+		logger:  logger,
+		client:  &http.Client{Timeout: sendTimeout},
+		sendURL: sendURL,
+		chatID:  chatID,
+		queue:   make(chan string, queueSize),
+	}
+	if sendURL != "" {
+		go n.run()
+	}
 	return n
 }
 
-func (n *Notifier) Notify(ctx context.Context, message string) {
+// Notify logs an alert and sends it to Telegram.
+func (n *Notifier) Notify(message string) {
 	n.logger.Warn("alert", slog.String("message", message))
+	n.send(message)
+}
+
+// Close waits for queued messages to be sent, at most closeTimeout.
+func (n *Notifier) Close() {
+	done := make(chan struct{})
+	go func() {
+		n.pending.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(closeTimeout):
+	}
+}
+
+func (n *Notifier) send(message string) {
 	if n.sendURL == "" {
 		return
 	}
-	if err := n.sendTelegram(ctx, message); err != nil {
-		n.logger.Warn("send telegram alert failed", slog.Any("err", err))
+	n.pending.Add(1)
+	select {
+	case n.queue <- message:
+	default:
+		n.pending.Done()
+		n.logger.Warn("telegram message dropped, queue is full")
+	}
+}
+
+func (n *Notifier) run() {
+	for message := range n.queue {
+		if err := n.sendTelegram(message); err != nil {
+			n.logger.Warn("send telegram message failed", slog.Any("err", err))
+		}
+		n.pending.Done()
 	}
 }
 
 // Errors from building or sending the request embed the URL, which holds the bot token,
 // so they are replaced instead of wrapped.
-func (n *Notifier) sendTelegram(ctx context.Context, message string) error {
+func (n *Notifier) sendTelegram(message string) error {
 	if len(message) > telegramMaxMessageLen {
 		message = message[:telegramMaxMessageLen]
 	}
 	form := url.Values{"chat_id": {n.chatID}, "text": {message}}
 	body := strings.NewReader(form.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.sendURL, body)
+	req, err := http.NewRequest(http.MethodPost, n.sendURL, body)
 	if err != nil {
 		return errBuildTelegramRequest
 	}

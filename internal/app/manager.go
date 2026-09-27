@@ -38,8 +38,8 @@ type Manager struct {
 	shareCleanupDone   <-chan struct{}
 }
 
-func New(cfg config.Config, logger *slog.Logger) *Manager {
-	return &Manager{cfg: cfg, logger: logger, notifier: notify.New(logger)}
+func New(cfg config.Config, logger *slog.Logger, notifier *notify.Notifier) *Manager {
+	return &Manager{cfg: cfg, logger: logger, notifier: notifier}
 }
 
 func (m *Manager) Run(ctx context.Context) error {
@@ -69,7 +69,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		select {
 		case event := <-events:
 			if len(event.Outdated) > 0 {
-				m.notifier.Notify(ctx, "Sources marked outdated: "+joinSourceIDs(event.Outdated))
+				m.notifier.Notify("Sources marked outdated: " + joinSourceIDs(event.Outdated))
 			}
 
 			serverStarted := srv != nil
@@ -80,7 +80,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			ds, err := m.loadDataset(event)
 			if err != nil {
 				if shouldKeepServingAfterLoadError(serverStarted) {
-					m.logger.Info("dataset reload failed", slog.Any("err", err))
+					m.logger.Error("dataset reload failed", slog.Any("err", err))
 					continue
 				}
 				return errors.Join(err, m.shutdownServer(srv), m.Close())

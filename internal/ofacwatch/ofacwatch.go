@@ -116,12 +116,12 @@ func (w *Watcher) check(ctx context.Context) {
 			slog.Int("consecutive_failures", st.ConsecutiveFailures),
 		)
 		if st.ConsecutiveFailures == failureAlertThreshold {
-			w.notifier.Notify(ctx, fmt.Sprintf(
+			w.notifier.Notify(fmt.Sprintf(
 				"OFAC watcher failed %d checks in a row, last error: %v", st.ConsecutiveFailures, err))
 		}
 	default:
 		if lines := changes(st.Snapshot, current); len(lines) > 0 {
-			w.notifier.Notify(ctx, "OFAC watcher: review internal/dataset/ofac.go\n"+
+			w.notifier.Notify("OFAC watcher: review internal/dataset/ofac.go\n" +
 				strings.Join(lines, "\n"))
 		}
 		st = state{Snapshot: &current}

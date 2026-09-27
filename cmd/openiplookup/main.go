@@ -9,6 +9,7 @@ import (
 
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/app"
 	"github.com/bohdansavastieiev/open-ip-lookup/internal/config"
+	"github.com/bohdansavastieiev/open-ip-lookup/internal/notify"
 )
 
 func main() {
@@ -18,7 +19,11 @@ func main() {
 }
 
 func run() error {
-	logger := newLogger(os.Getenv("APP_ENV"))
+	baseLogger := newLogger(os.Getenv("APP_ENV"))
+	notifier := notify.New(baseLogger)
+	defer notifier.Close()
+	logger := slog.New(notify.NewHandler(baseLogger.Handler(), notifier))
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -29,7 +34,7 @@ func run() error {
 	}
 	logger.Info("config loaded successfully")
 
-	mgr := app.New(cfg, logger)
+	mgr := app.New(cfg, logger, notifier)
 	if err := mgr.Run(ctx); err != nil {
 		logger.Error("run app", slog.Any("err", err))
 		return err
